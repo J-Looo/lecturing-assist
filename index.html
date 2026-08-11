@@ -88,32 +88,40 @@
     }
 
     /* 右上角浮動 QR Code 區塊 (可收合隱藏) */
-    #qr-box {
-      position: absolute;
-      top: 1vw;
-      right: 1vw;
-      background: #161b22;
-      border: 1px solid #444c56;
-      border-radius: 8px;
-      padding: 8px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-      z-index: 50;
-      transition: all 0.3s ease;
-    }
-    #qr-header {
-      width: 100%;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 4px;
-    }
-    #qr-toggle-btn {
-      background: #30363d; border: none; color: #fff;
-      border-radius: 3px; cursor: pointer; padding: 1px 6px; font-size: 0.8vw;
-    }
+#qr-box {
+  position: absolute;
+  top: 1vw;
+  right: 1vw;
+  background: #161b22;
+  border: 1px solid #444c56;
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  z-index: 999; /* 確保按鈕層級在最上層 */
+}
+#qr-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+#qr-toggle-btn {
+  background: #30363d; 
+  border: 1px solid #444c56; 
+  color: #fff;
+  border-radius: 4px; 
+  cursor: pointer; 
+  padding: 2px 8px; 
+  font-size: 0.8vw;
+  z-index: 1000;
+}
+#qr-toggle-btn:hover {
+  background: #444c56;
+}
     #qrcode img { border-radius: 4px; background: #fff; padding: 4px; }
 
     /* --- 下半部：摘要文字顯示大小 (2.8vw 醒目藍色) --- */
@@ -165,16 +173,16 @@
     
     <!-- 上半部：語音 + 翻譯區 -->
     <section id="top-section">
-      <!-- 右上角 QR Code 與隱藏按鈕 -->
-      <div id="qr-box">
-        <div id="qr-header">
-          <span style="font-size:0.7vw; color:#8b949e;">手機掃碼</span>
-          <button id="qr-toggle-btn" onclick="toggleQR()">隱藏 [-]</button>
-        </div>
-        <div id="qr-content">
-          <div id="qrcode"></div>
-        </div>
-      </div>
+      <!-- 右上角 QR Code 區塊 -->
+<div id="qr-box">
+  <div id="qr-header">
+    <span id="qr-title" style="font-size:0.7vw; color:#8b949e;">手機掃碼</span>
+    <button id="qr-toggle-btn" type="button" onclick="toggleQR(event)">隱藏 [-]</button>
+  </div>
+  <div id="qr-content">
+    <div id="qrcode"></div>
+  </div>
+</div>
 
       <!-- 語音文字 -->
       <div id="speech-text">等待講者連線與語音輸入...</div>
@@ -213,21 +221,28 @@
     });
 
    // 收合 / 展開 QR Code 按鈕 (已修正開關狀態與顯示邏輯)
-    let isQRHidden = false;
-    function toggleQR() {
-      const qrContent = document.getElementById('qr-content');
-      const btn = document.getElementById('qr-toggle-btn');
-      
-      isQRHidden = !isQRHidden; // 切換狀態
-      
-      if (isQRHidden) {
-        qrContent.style.display = 'none'; // 隱藏 QR Code
-        btn.innerText = '展開 [+]';
-      } else {
-        qrContent.style.display = 'block'; // 顯示 QR Code
-        btn.innerText = '隱藏 [-]';
-      }
-    }
+// 預設為展開狀態 (isQRHidden = false)
+let isQRHidden = false;
+
+function toggleQR(event) {
+  if (event) event.stopPropagation(); // 防止點擊穿透
+  
+  const qrContent = document.getElementById('qr-content');
+  const btn = document.getElementById('qr-toggle-btn');
+  const title = document.getElementById('qr-title');
+  
+  isQRHidden = !isQRHidden; // 切換狀態
+  
+  if (isQRHidden) {
+    qrContent.style.display = 'none';
+    btn.innerText = '展開 [+]';
+    title.style.display = 'none'; // 縮小時隱藏標題，讓卡片變最小
+  } else {
+    qrContent.style.display = 'block';
+    btn.innerText = '隱藏 [-]';
+    title.style.display = 'inline';
+  }
+}
 
     // 3. 關鍵字高亮
     let customKeywords = [];
