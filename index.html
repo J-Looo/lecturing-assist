@@ -212,17 +212,19 @@
       width: 110, height: 110
     });
 
-    // 收合 / 展開 QR Code 按鈕
+   // 收合 / 展開 QR Code 按鈕 (已修正開關狀態與顯示邏輯)
     let isQRHidden = false;
     function toggleQR() {
       const qrContent = document.getElementById('qr-content');
       const btn = document.getElementById('qr-toggle-btn');
-      isQRHidden = !isQRHidden;
+      
+      isQRHidden = !isQRHidden; // 切換狀態
+      
       if (isQRHidden) {
-        qrContent.style.display = 'none';
+        qrContent.style.display = 'none'; // 隱藏 QR Code
         btn.innerText = '展開 [+]';
       } else {
-        qrContent.style.display = 'block';
+        qrContent.style.display = 'block'; // 顯示 QR Code
         btn.innerText = '隱藏 [-]';
       }
     }
