@@ -160,16 +160,37 @@
       };
     }
 
-    document.getElementById('micBtn').onclick = () => {
-      if (!recognition) return alert("瀏覽器不支援語音辨識！");
-      if (!isListening) {
-        recognition.lang = document.getElementById('sourceLangSelect').value;
-        recognition.start();
-      } else {
-        isListening = false;
-        recognition.stop();
-      }
-    };
+// 確保啟動前先正確設定語言
+document.getElementById('micBtn').onclick = () => {
+  if (!recognition) return alert("瀏覽器不支援語音辨識！");
+  
+  if (!isListening) {
+    // 1. 強制在 start() 之前設定正確語言代碼
+    const selectedLang = document.getElementById('sourceLangSelect').value;
+    recognition.lang = selectedLang;
+
+    // 2. 啟動辨識
+    try {
+      recognition.start();
+    } catch(e) {
+      console.error("啟動失敗", e);
+    }
+  } else {
+    isListening = false;
+    recognition.stop();
+  }
+};
+
+// 切換語言選單時，若正在收音，自動重新載入語言
+document.getElementById('sourceLangSelect').onchange = () => {
+  if (isListening && recognition) {
+    recognition.stop();
+    setTimeout(() => {
+      recognition.lang = document.getElementById('sourceLangSelect').value;
+      recognition.start();
+    }, 200);
+  }
+};
   </script>
 </body>
 </html>
