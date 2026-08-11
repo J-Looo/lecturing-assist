@@ -8,6 +8,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <script src="https://js.puter.com/v2/"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -323,21 +324,12 @@
     }
 
     function checkKeyStatus() {
-      const key = getGeminiKey();
-      
-      // 翻譯功能目前使用 Google 翻譯網頁版免金鑰 API，不需要金鑰提示
+      // 翻譯與摘要功能目前皆有免金鑰的替代方案 (Google 翻譯 & Puter.js)
       if (transBox.innerText === '等待翻譯服務串接...' || transBox.innerText.includes('請點擊右上角')) {
         transBox.innerText = '等待語音輸入...';
       }
-      
-      if (!key) {
-        if (summaryBox.innerText === '等待摘要服務串接...') {
-          summaryBox.innerHTML = '<span style="color:#8b949e; font-size:1.4vw;">請點擊右上角「⚙️ 設定 Gemini 金鑰」以啟動話題摘要</span>';
-        }
-      } else {
-        if (summaryBox.innerText === '等待摘要服務串接...' || summaryBox.innerText.includes('請點擊右上角')) {
-          summaryBox.innerText = '等待語音輸入以產生話題摘要...';
-        }
+      if (summaryBox.innerText === '等待摘要服務串接...' || summaryBox.innerText.includes('請點擊右上角')) {
+        summaryBox.innerText = '等待語音輸入以產生話題摘要...';
       }
     }
 
@@ -398,28 +390,16 @@
       translateText(text, sourceLang, targetLangName);
     }, 600);
 
-    // 呼叫 Gemini API 產生課堂摘要
+    // 呼叫 AI 產生課堂摘要 (有金鑰使用 Gemini，無金鑰自動使用免金鑰的 Puter.js)
     async function generateSummary() {
-      const apiKey = getGeminiKey();
-      if (!apiKey) return;
       if (fullTranscriptList.length === 0) return;
 
       // 顯示摘要中動畫
       summaryBox.innerHTML = '<div class="loading-dots"><span></span><span></span><span></span><span style="font-size: 1vw; margin-left: 8px; color: #7dd3fc;">AI 正在彙整摘要中...</span></div>';
 
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-        const transcriptText = fullTranscriptList.join('\n');
-
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{
-                text: `You are an AI classroom teaching assistant. Based on the following transcript history of the lecture so far, generate a concise, bullet-pointed summary of the main topics discussed. 
+      const apiKey = getGeminiKey();
+      const transcriptText = fullTranscriptList.join('\n');
+      const systemPrompt = `You are an AI classroom teaching assistant. Based on the following transcript history of the lecture so far, generate a concise, bullet-pointed summary of the main topics discussed. 
 Requirements:
 1. Write in Traditional Chinese (繁體中文).
 2. List 2 to 3 core topics or key points.
@@ -428,30 +408,60 @@ Requirements:
 5. Do not include any preamble, explanations, introduction, markdown headers, or footnotes. Just return the raw bulleted text list.
 
 Lecture transcript history:
-${transcriptText}`
-              }]
-            }],
-            generationConfig: {
-              temperature: 0.3,
-              maxOutputTokens: 800
-            }
-          })
-        });
+${transcriptText}`;
 
-        if (!response.ok) {
-          throw new Error(`API 錯誤: ${response.status}`);
+      if (apiKey) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              contents: [{
+                parts: [{ text: systemPrompt }]
+              }],
+              generationConfig: {
+                temperature: 0.3,
+                maxOutputTokens: 800
+              }
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error(`Gemini API 錯誤: ${response.status}`);
+          }
+
+          const data = await response.json();
+          const summary = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+
+          if (summary) {
+            summaryBox.innerText = summary;
+            return;
+          }
+        } catch (err) {
+          console.warn('Gemini summary failed, falling back to Puter:', err);
+          // 失敗時自動降級使用 Puter.js
+        }
+      }
+
+      // 使用免金鑰的 Puter.js 進行話題摘要
+      try {
+        if (typeof puter === 'undefined') {
+          throw new Error('Puter SDK 未載入，請檢查網路連線');
         }
 
-        const data = await response.json();
-        const summary = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        const summary = await puter.ai.chat(systemPrompt);
 
-        if (summary) {
-          summaryBox.innerText = summary;
+        if (summary && summary.trim()) {
+          summaryBox.innerText = summary.trim();
         } else {
           summaryBox.innerText = '摘要結果為空';
         }
       } catch (err) {
-        console.error('Summary generation failed:', err);
+        console.error('Puter summary failed:', err);
         summaryBox.innerHTML = `<span style="color:#ef4444; font-size:1.2vw;">無法產生摘要: ${err.message}</span>`;
       }
     }
@@ -496,13 +506,8 @@ ${transcriptText}`
       fullTranscriptList.push(data.text);
       updateStats(data.text);
 
-      // 觸發 AI 話題摘要功能
-      const key = getGeminiKey();
-      if (key) {
-        debouncedGenerateSummary();
-      } else {
-        checkKeyStatus();
-      }
+      // 觸發 AI 話題摘要功能（有金鑰使用 Gemini，無金鑰自動降級使用 Puter.js）
+      debouncedGenerateSummary();
     });
 
     let totalWordCount = 0;
