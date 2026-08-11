@@ -330,11 +330,15 @@
     // 1. 初始化 Firebase 軟容錯
     let db = null;
     try {
-      const firebaseConfig = {
-        databaseURL: "https://test-speaker-cb3f5-default-rtdb.asia-southeast1.firebasedatabase.app"
-      };
-      firebase.initializeApp(firebaseConfig);
-      db = firebase.database();
+      if (typeof firebase !== 'undefined') {
+        const firebaseConfig = {
+          databaseURL: "https://test-speaker-cb3f5-default-rtdb.asia-southeast1.firebasedatabase.app"
+        };
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.database();
+      } else {
+        console.warn("Firebase SDK 未載入");
+      }
     } catch (e) {
       console.error("Firebase 初始化失敗:", e);
     }
@@ -348,15 +352,19 @@
     }
 
     // 3. 生成 QR Code 軟容錯
-    const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
+    const baseUrl = window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
     const qrcodeContainer = document.getElementById("qrcode");
     if (qrcodeContainer) {
       qrcodeContainer.innerHTML = "";
       try {
-        new QRCode(qrcodeContainer, { text: `${baseUrl}/speaker.html?room=${roomId}`, width: 100, height: 100 });
+        if (typeof QRCode !== 'undefined') {
+          new QRCode(qrcodeContainer, { text: `${baseUrl}/speaker.html?room=${roomId}`, width: 100, height: 100 });
+        } else {
+          qrcodeContainer.innerText = "QRCode 套件未載入";
+        }
       } catch (e) {
         console.error("QRCode 載入失敗:", e);
-        qrcodeContainer.innerText = "無法載入 QR Code 套件";
+        qrcodeContainer.innerText = "無法載入 QR Code";
       }
     }
 
@@ -374,14 +382,25 @@
       }
     }
 
+    // 轉義正則表達式特殊字元，避免無效正則造成崩潰 Bug
+    function escapeRegExp(string) {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
     let customKeywords = [];
     function applyHighlights(text) {
-      if(!text) return '';
+      if (!text) return '';
       let result = text;
       customKeywords.forEach(kw => {
-        if(kw.trim()){
-          const reg = new RegExp(kw.trim(), 'gi');
-          result = result.replace(reg, match => `<span class="highlight">${match}</span>`);
+        const trimmed = kw ? kw.trim() : '';
+        if (trimmed) {
+          try {
+            const escaped = escapeRegExp(trimmed);
+            const reg = new RegExp(escaped, 'gi');
+            result = result.replace(reg, match => `<span class="highlight">${match}</span>`);
+          } catch (e) {
+            console.error("Regex highlight error:", e);
+          }
         }
       });
       return result;
@@ -417,6 +436,8 @@
     // 語音播放 (TTS) 函數
     let currentSpeechUtterance = null;
     function speakText(elementId, isSource) {
+      if (!('speechSynthesis' in window)) return alert('您的瀏覽器不支援語音合成功能');
+      
       const element = document.getElementById(elementId);
       if (!element) return;
       const text = element.innerText;
@@ -426,8 +447,8 @@
       const btnId = isSource ? 'tts-source-btn' : 'tts-trans-btn';
       const btn = document.getElementById(btnId);
       
-      // 如果正在撥放，點擊則停止
-      if (window.speechSynthesis.speaking && currentSpeechUtterance) {
+      // 如果正在播放，點擊則停止
+      if (window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
         if (btn && btn.classList.contains('speaking')) {
           btn.classList.remove('speaking');
@@ -449,7 +470,7 @@
       if (isSource) {
         const sourceLabel = document.getElementById('source-lang-label');
         const sourceLangName = sourceLabel ? sourceLabel.innerText.replace(/[()]/g, '') : '英文';
-        lang = getLangCode(sourceLangName) || 'zh-TW';
+        lang = getLangCode(sourceLangName) || 'en';
       } else {
         const targetLabel = document.getElementById('target-lang-label');
         const targetLangName = targetLabel ? targetLabel.innerText.replace(/[()]/g, '') : '繁體中文';
@@ -484,7 +505,7 @@
       }
       
       // 動態計算字型大小
-      const charCount = text.length;
+      const charCount = element.innerText ? element.innerText.length : text.length;
       let baseSize = elementId === 'speech-text' ? speechFontSize : transFontSize;
       
       let scaledSize = baseSize;
@@ -493,7 +514,7 @@
         scaledSize = baseSize * Math.max(0.65, 1 - (overflow * 0.003));
       }
       
-      // 限制最小字體不可低於 2.2vw (確保遠處看得清)，最大不可高於原本設定的 baseSize
+      // 限制最小字體不可低於 2.2vw，最大不可高於原本設定的 baseSize
       const minReadableSize = 2.2; 
       scaledSize = Math.max(minReadableSize, Math.min(scaledSize, baseSize));
       
@@ -567,10 +588,6 @@
       return l;
     }
 
-    function getGroqKey() {
-      return localStorage.getItem('groq_api_key') || '';
-    }
-
     function checkKeyStatus() {
       if (transBox && transBox.innerText === '等待翻譯服務串接...') {
         updateBoxText('trans-text', '等待語音輸入...');
@@ -590,7 +607,7 @@
 
     // 呼叫 Google 翻譯免金鑰 API 進行翻譯
     async function translateText(text, sourceLang, targetLangName) {
-      const cleanText = text.trim();
+      const cleanText = text ? text.trim() : '';
       if (!cleanText || cleanText === lastTranslatedText) return;
 
       // 顯示翻譯中動畫
@@ -604,14 +621,14 @@
 
         const response = await fetch(url);
         if (!response.ok) {
-          throw new Error(`Google 翻譯 API 錯誤: ${response.status}`);
+          throw new Error(`Google 翻譯回應異常: ${response.status}`);
         }
 
         const data = await response.json();
         let translated = '';
         if (data && data[0]) {
           data[0].forEach(item => {
-            if (item[0]) {
+            if (item && item[0]) {
               translated += item[0];
             }
           });
@@ -658,7 +675,7 @@
           targetLangNameVal = data.targetLangName;
         }
 
-        // 觸發翻譯（使用免費 of Google 翻譯，無需金鑰）
+        // 觸發翻譯
         debouncedTranslate(data.text, sourceLangVal, targetLangNameVal);
       });
     }
@@ -678,6 +695,7 @@
     let totalWordCount = 0;
     let startTime = Date.now();
     function updateStats(text) {
+      if (!text) return;
       totalWordCount += text.trim().length;
       const minutes = (Date.now() - startTime) / 60000;
       const sWords = document.getElementById('stat-words');
@@ -689,10 +707,16 @@
     function importSheetsKeywords() {
       const url = prompt("請貼上 Google 試算表公開發布的 CSV 網址：");
       if (url) {
-        fetch(url).then(res => res.text()).then(data => {
-          customKeywords = data.split(/\r?\n/).flatMap(row => row.split(','));
-          alert(`成功匯入 ${customKeywords.length} 個關鍵字！`);
-        });
+        fetch(url)
+          .then(res => res.text())
+          .then(data => {
+            customKeywords = data.split(/\r?\n/).flatMap(row => row.split(',')).map(k => k.trim()).filter(Boolean);
+            alert(`成功匯入 ${customKeywords.length} 個關鍵字！`);
+          })
+          .catch(err => {
+            alert("關鍵字匯入失敗，請確認網址與 CSV 發布設定。");
+            console.error("CSV Fetch Error:", err);
+          });
       }
     }
 
