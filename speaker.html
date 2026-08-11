@@ -57,6 +57,23 @@
       width: 100%; min-height: 80px; background: #0d1117; border: 1px solid #21262d;
       border-radius: 8px; padding: 10px; font-size: 1rem; color: #e3e8f0; word-break: break-word;
     }
+    /* 教師遠端操控面板樣式 */
+    .control-panel {
+      width: 100%; max-width: 400px; background: #161b22; border: 1px solid #30363d;
+      border-radius: 12px; padding: 20px; display: flex; flex-direction: column;
+      gap: 15px; margin-bottom: 25px;
+    }
+    .control-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    }
+    .control-btn {
+      background: #21262d; border: 1px solid #30363d; color: #c9d1d9;
+      padding: 8px 16px; border-radius: 6px; font-size: 0.9rem; font-weight: bold;
+      cursor: pointer; transition: all 0.2s ease; outline: none;
+    }
+    .control-btn:active {
+      transform: scale(0.95);
+    }
   </style>
 </head>
 <body>
@@ -96,6 +113,55 @@
     <button id="micBtn">🎤</button>
     <div id="statusText" style="font-size:0.85rem; color:#8b949e;">點擊麥克風開始收音</div>
     <div class="live-preview" id="liveText">即時辨識文字將顯示於此...</div>
+  </div>
+
+  <!-- 3. 教師遠端操控面板 -->
+  <div class="control-panel">
+    <h4 style="color: #38bdf8; border-bottom: 1px solid #21262d; padding-bottom: 8px; font-size: 1rem; margin-bottom: 5px;">🛠️ 課堂遠端功能</h4>
+    
+    <!-- 播放鈴聲 -->
+    <div class="control-row">
+      <div>
+        <div style="font-size: 0.95rem; font-weight: bold;">🔔 播放注意力鈴聲</div>
+        <div style="font-size: 0.75rem; color: #8b949e; margin-top: 2px;">在電腦端播放空氣喇叭音效</div>
+      </div>
+      <button class="control-btn" id="bellBtn" onclick="triggerBell()" style="background: #238636; color: #fff;">播放</button>
+    </div>
+
+    <!-- 噪音偵測 -->
+    <div class="control-row" style="border-top: 1px solid #21262d; padding-top: 15px;">
+      <div>
+        <div style="font-size: 0.95rem; font-weight: bold;">🔊 噪音監測模式</div>
+        <div style="font-size: 0.75rem; color: #8b949e; margin-top: 2px;">超過 75 分貝時電腦螢幕閃爍警示</div>
+      </div>
+      <button class="control-btn" id="noiseBtn" onclick="toggleNoiseMonitor()">開啟</button>
+    </div>
+    
+    <!-- 實時分貝顯示 (隱藏/開啟時顯示) -->
+    <div id="decibelMeter" style="display: none; align-items: center; gap: 10px; font-size: 0.85rem; color: #8b949e; margin-top: 5px;">
+      <span>音量：</span>
+      <div style="flex: 1; height: 10px; background: #0d1117; border-radius: 5px; overflow: hidden; position: relative;">
+        <div id="decibelBar" style="width: 0%; height: 100%; background: #238636; transition: width 0.1s ease;"></div>
+      </div>
+      <span id="decibelVal">0 dB</span>
+    </div>
+
+    <!-- 詢問 AI 問題 -->
+    <div style="display: flex; flex-direction: column; gap: 10px; border-top: 1px solid #21262d; padding-top: 15px;">
+      <div class="control-row">
+        <div>
+          <div style="font-size: 0.95rem; font-weight: bold;">🤖 語音詢問 AI</div>
+          <div style="font-size: 0.75rem; color: #8b949e; margin-top: 2px;">向 Groq 大模型發問，答案投在電腦螢幕</div>
+        </div>
+        <button class="control-btn" id="aiBtn" onclick="toggleAIQuestion()">發問</button>
+      </div>
+      <div id="aiStatusBox" style="display: none; flex-direction: column; gap: 8px; background: #0d1117; border: 1px solid #21262d; border-radius: 8px; padding: 10px; font-size: 0.85rem;">
+        <div id="aiStatusText" style="color: #8b949e;">請對麥克風說出您的問題...</div>
+        <div id="aiQuestionPreview" style="color: #e3e8f0; font-weight: bold; word-break: break-word;"></div>
+        <div id="aiAnswerPreview" style="color: #facc15; word-break: break-word; display: none;"></div>
+        <button class="control-btn" id="aiCloseBtn" onclick="closeAIQuestion()" style="display: none; background: #da3633; border: none; color: #fff; padding: 6px; border-radius: 4px; font-size: 0.8rem; cursor: pointer; align-self: flex-end;">結束對話</button>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -523,6 +589,10 @@
 
     // 麥克風按鈕按鍵派發
     document.getElementById('micBtn').onclick = () => {
+      if (isAIRecording && aiRecognition) {
+        aiRecognition.stop();
+      }
+
       if (currentMode === 'standard') {
         if (!recognition) return alert("您的手機瀏覽器不支援語音辨識！");
         
@@ -546,6 +616,235 @@
         }
       }
     };
+
+    // --- 1. 遠端播放注意力鈴聲 ---
+    function triggerBell() {
+      db.ref(`rooms/${roomId}/commands/play_bell`).set(Date.now());
+      const btn = document.getElementById('bellBtn');
+      if (btn) {
+        btn.style.background = '#facc15';
+        btn.innerText = '已播放';
+        setTimeout(() => {
+          btn.style.background = '#238636';
+          btn.innerText = '播放';
+        }, 1500);
+      }
+    }
+
+    // --- 2. 手機端分貝監測邏輯 ---
+    let noiseInterval = null;
+    let noiseAudioContext = null;
+    let noiseStream = null;
+    let isNoiseMonitoring = false;
+
+    async function toggleNoiseMonitor() {
+      const btn = document.getElementById('noiseBtn');
+      const meter = document.getElementById('decibelMeter');
+      if (!isNoiseMonitoring) {
+        try {
+          noiseStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          noiseAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+          const source = noiseAudioContext.createMediaStreamSource(noiseStream);
+          const noiseAnalyser = noiseAudioContext.createAnalyser();
+          noiseAnalyser.fftSize = 512;
+          source.connect(noiseAnalyser);
+          const bufferLength = noiseAnalyser.frequencyBinCount;
+          const dataArray = new Uint8Array(bufferLength);
+
+          isNoiseMonitoring = true;
+          btn.style.background = '#da3633';
+          btn.style.color = '#fff';
+          btn.innerText = '關閉';
+          meter.style.display = 'flex';
+
+          let lastAlertTime = 0;
+
+          noiseInterval = setInterval(() => {
+            noiseAnalyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < bufferLength; i++) {
+              sum += dataArray[i];
+            }
+            const average = sum / bufferLength;
+            
+            // 將平均音量分數映射到 0~100 %
+            const volumeScore = Math.min(Math.round((average / 120) * 100), 100);
+            
+            // 更新手機端分貝儀 UI
+            const bar = document.getElementById('decibelBar');
+            const val = document.getElementById('decibelVal');
+            if (bar) bar.style.width = volumeScore + '%';
+            if (val) val.innerText = volumeScore + ' dB';
+            
+            if (bar) {
+              if (volumeScore > 75) {
+                bar.style.background = '#da3633'; // 紅色
+              } else if (volumeScore > 50) {
+                bar.style.background = '#facc15'; // 黃色
+              } else {
+                bar.style.background = '#238636'; // 綠色
+              }
+            }
+
+            // 超過 75 分貝限制即寫入 Firebase
+            if (volumeScore > 75) {
+              const now = Date.now();
+              if (now - lastAlertTime > 1500) {
+                lastAlertTime = now;
+                db.ref(`rooms/${roomId}/noise_alert`).set({
+                  active: true,
+                  timestamp: now
+                });
+              }
+            }
+          }, 100);
+          
+        } catch (err) {
+          console.error("無法啟動噪音監測:", err);
+          alert("啟動監測失敗，請確認麥克風權限！");
+          closeNoiseMonitor();
+        }
+      } else {
+        closeNoiseMonitor();
+      }
+    }
+
+    function closeNoiseMonitor() {
+      isNoiseMonitoring = false;
+      const btn = document.getElementById('noiseBtn');
+      const meter = document.getElementById('decibelMeter');
+      if (btn) {
+        btn.style.background = '#21262d';
+        btn.style.color = '#c9d1d9';
+        btn.innerText = '開啟';
+      }
+      if (meter) meter.style.display = 'none';
+      
+      if (noiseInterval) {
+        clearInterval(noiseInterval);
+        noiseInterval = null;
+      }
+      if (noiseStream) {
+        noiseStream.getTracks().forEach(track => track.stop());
+        noiseStream = null;
+      }
+      if (noiseAudioContext) {
+        noiseAudioContext.close();
+        noiseAudioContext = null;
+      }
+      db.ref(`rooms/${roomId}/noise_alert`).remove();
+    }
+
+    // --- 3. 語音詢問 AI 問題對答邏輯 ---
+    let aiRecognition = null;
+    let isAIRecording = false;
+
+    function toggleAIQuestion() {
+      const btn = document.getElementById('aiBtn');
+      const box = document.getElementById('aiStatusBox');
+      const text = document.getElementById('aiStatusText');
+      const qPreview = document.getElementById('aiQuestionPreview');
+      const aPreview = document.getElementById('aiAnswerPreview');
+      const closeBtn = document.getElementById('aiCloseBtn');
+
+      if (!isAIRecording) {
+        if (!window.webkitSpeechRecognition && !window.SpeechRecognition) {
+          return alert("您的手機瀏覽器不支援語音對話功能！");
+        }
+
+        // 先暫停一般收音
+        if (isListening && recognition) {
+          isListening = false;
+          recognition.stop();
+        }
+        if (isWhisperListening) {
+          stopWhisper();
+        }
+
+        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+        aiRecognition = new SpeechRec();
+        aiRecognition.continuous = false;
+        aiRecognition.interimResults = false;
+        aiRecognition.lang = 'zh-TW';
+
+        aiRecognition.onstart = () => {
+          isAIRecording = true;
+          btn.style.background = '#da3633';
+          btn.innerText = '停止';
+          box.style.display = 'flex';
+          text.innerText = '🎙️ 聆聽您的問題中...（講完請點擊停止）';
+          qPreview.innerText = '';
+          aPreview.style.display = 'none';
+          closeBtn.style.display = 'none';
+        };
+
+        aiRecognition.onresult = (e) => {
+          const resultText = e.results[0][0].transcript;
+          if (resultText) {
+            qPreview.innerText = `❓ 問題："${resultText}"`;
+            text.innerText = '⏳ AI 正在思考回答...';
+            
+            db.ref(`rooms/${roomId}/ai_qna`).set({
+              question: resultText,
+              status: 'pending',
+              timestamp: Date.now()
+            });
+          }
+        };
+
+        aiRecognition.onend = () => {
+          isAIRecording = false;
+          btn.style.background = '#21262d';
+          btn.innerText = '發問';
+          if (text.innerText === '🎙️ 聆聽您的問題中...（講完請點擊停止）') {
+            text.innerText = '未偵測到您的語音問題，請重試。';
+          }
+        };
+
+        aiRecognition.start();
+      } else {
+        if (aiRecognition) {
+          aiRecognition.stop();
+        }
+      }
+    }
+
+    // 監聽 AI Q&A 同步狀態
+    db.ref(`rooms/${roomId}/ai_qna`).on('value', (snapshot) => {
+      const data = snapshot.val();
+      const box = document.getElementById('aiStatusBox');
+      const text = document.getElementById('aiStatusText');
+      const qPreview = document.getElementById('aiQuestionPreview');
+      const aPreview = document.getElementById('aiAnswerPreview');
+      const closeBtn = document.getElementById('aiCloseBtn');
+
+      if (data) {
+        if (box) box.style.display = 'flex';
+        if (qPreview) qPreview.innerText = `❓ 問題："${data.question}"`;
+        
+        if (data.status === 'pending') {
+          if (text) text.innerText = '⏳ AI 正在思考回答...';
+          if (aPreview) aPreview.style.display = 'none';
+          if (closeBtn) closeBtn.style.display = 'none';
+        } else if (data.status === 'replied') {
+          if (text) text.innerText = '🙋 AI 已完成回答！是否關閉投影畫面以繼續上課？';
+          if (aPreview) {
+            aPreview.style.display = 'block';
+            aPreview.innerText = `💡 回答：${data.answer}`;
+          }
+          if (closeBtn) {
+            closeBtn.style.display = 'block';
+            closeBtn.innerText = '關閉投影';
+          }
+        }
+      } else {
+        if (box) box.style.display = 'none';
+      }
+    });
+
+    function closeAIQuestion() {
+      db.ref(`rooms/${roomId}/ai_qna`).remove();
+    }
   </script>
 </body>
 </html>
