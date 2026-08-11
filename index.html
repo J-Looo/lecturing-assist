@@ -172,7 +172,6 @@
     const speechBox = document.getElementById('speech-text');
     const transBox = document.getElementById('trans-text');
 
-    // 取得清理後的 API Key
     function getCleanApiKey() {
       if (typeof GEMINI_API_KEY === 'undefined' || !GEMINI_API_KEY) return null;
       return GEMINI_API_KEY.trim();
@@ -196,7 +195,6 @@
         return;
       }
 
-      // 使用 400ms 防抖，避免講話途中每拍一個字就大量發送 API 請求
       clearTimeout(translateDebounceTimer);
       translateDebounceTimer = setTimeout(() => {
         translateAndCorrectWithGemini(data.text, data.targetLangName || '繁體中文', apiKey);
@@ -205,46 +203,41 @@
 
     let lastText = '';
     async function translateAndCorrectWithGemini(inputText, targetLang, apiKey) {
-  if (inputText === lastText) return;
-  lastText = inputText;
+      if (inputText === lastText) return;
+      lastText = inputText;
 
-  const promptText = `你是一位精通語音校正的課堂翻譯員。
+      const promptText = `你是一位精通語音校正的課堂翻譯員。
 輸入的文字來自語音辨識，可能存在同音字誤判或斷句錯誤（例如將 "Does anyone" 誤判成 "Duzz anyone" 或 "Is anyone"）。
 請先進行【語意自動校正】，然後翻譯為【${targetLang}】。
 請直接輸出翻譯結果，絕對不要加入任何解釋、引號或多餘文字。
 
 語音輸入文字："${inputText}"`;
 
-  try {
-    // 1. 網址使用標準 endpoint，不帶 ?key=
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`;
+      try {
+        // 模型切換回 gemini-1.5-flash
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: promptText }] }]
+          })
+        });
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        // 2. 將 key 帶在 Authorization 標頭中以通過 GCP Service Account 驗證
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: promptText }] }]
-      })
-    });
+        const resData = await response.json();
 
-    const resData = await response.json();
-
-    if (resData.candidates && resData.candidates[0].content && resData.candidates[0].content.parts[0].text) {
-      transBox.style.color = '#facc15';
-      transBox.innerText = resData.candidates[0].content.parts[0].text.trim();
-    } else if (resData.error) {
-      transBox.style.color = '#ef4444';
-      transBox.innerText = `❌ Gemini API 錯誤 (${resData.error.code}): ${resData.error.message}`;
+        if (resData.candidates && resData.candidates[0].content && resData.candidates[0].content.parts[0].text) {
+          transBox.style.color = '#facc15';
+          transBox.innerText = resData.candidates[0].content.parts[0].text.trim();
+        } else if (resData.error) {
+          transBox.style.color = '#ef4444';
+          transBox.innerText = `❌ Gemini API 錯誤 (${resData.error.code}): ${resData.error.message}`;
+        }
+      } catch (e) {
+        transBox.style.color = '#ef4444';
+        transBox.innerText = `❌ 網路/API 連線失敗: ${e.message}`;
+      }
     }
-  } catch (e) {
-    transBox.style.color = '#ef4444';
-    transBox.innerText = `❌ 網路/API 連線失敗: ${e.message}`;
-  }
-}
 
     let fullTranscriptList = [];
     const summaryBox = document.getElementById('summary-text');
@@ -267,8 +260,8 @@
       const recentContext = fullTranscriptList.slice(-10).join('\n');
       
       try {
-        // 統一採用 gemini-2.0-flash
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+        // 模型切換回 gemini-1.5-flash
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
