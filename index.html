@@ -1,10 +1,14 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <script src="config.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>課堂即時字幕與 AI 視覺牆</title>
+  
+  <!-- 引入設定檔 (包含 GEMINI_API_KEY) -->
+  <script src="config.js"></script>
+
+  <!-- 第三方函式庫與 Firebase -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -23,7 +27,7 @@
       justify-content: space-between;
     }
 
-    /* 頂部隱藏式選單列 */
+    /* 頂部控制列 */
     header {
       display: flex;
       justify-content: space-between;
@@ -42,7 +46,7 @@
     }
     .btn:hover { background: #30363d; color: #fff; }
 
-    /* 主區域：劃分為「上半部語音翻譯」與「下半部摘要」 */
+    /* 主區域 */
     main {
       flex: 1;
       display: flex;
@@ -53,7 +57,7 @@
       position: relative;
     }
 
-    /* --- 上半部：語音文字 + 翻譯文字 + 右上角 QR Code --- */
+    /* 上半部：語音 + 翻譯區 */
     #top-section {
       flex: 1.2;
       border: 2px solid #22272e;
@@ -66,7 +70,6 @@
       position: relative;
     }
 
-    /* 語音文字顯示大小 (5vw) */
     #speech-text {
       font-size: 4.8vw;
       font-weight: 800;
@@ -77,7 +80,6 @@
       text-shadow: 0 0 20px rgba(56, 189, 248, 0.2);
     }
 
-    /* 翻譯文字顯示大小 (3.2vw 金黃色) */
     #trans-text {
       font-size: 3.2vw;
       font-weight: 700;
@@ -87,44 +89,69 @@
       min-height: 1.2em;
     }
 
-    /* 右上角浮動 QR Code 區塊 (可收合隱藏) */
-#qr-box {
-  position: absolute;
-  top: 1vw;
-  right: 1vw;
-  background: #161b22;
-  border: 1px solid #444c56;
-  border-radius: 8px;
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-  z-index: 999; /* 確保按鈕層級在最上層 */
-}
-#qr-header {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-#qr-toggle-btn {
-  background: #30363d; 
-  border: 1px solid #444c56; 
-  color: #fff;
-  border-radius: 4px; 
-  cursor: pointer; 
-  padding: 2px 8px; 
-  font-size: 0.8vw;
-  z-index: 1000;
-}
-#qr-toggle-btn:hover {
-  background: #444c56;
-}
-    #qrcode img { border-radius: 4px; background: #fff; padding: 4px; }
+    /* 右上角 QR Code 浮動卡片 */
+    #qr-card {
+      position: absolute;
+      top: 1.5vw;
+      right: 1.5vw;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+      z-index: 100;
+      min-width: 140px;
+    }
 
-    /* --- 下半部：摘要文字顯示大小 (2.8vw 醒目藍色) --- */
+    .qr-card-header {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #21262d;
+    }
+
+    .qr-card-title {
+      font-size: 0.8vw;
+      color: #8b949e;
+      font-weight: 600;
+    }
+
+    #qr-toggle-btn {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      border-radius: 4px;
+      cursor: pointer;
+      padding: 2px 6px;
+      font-size: 0.75vw;
+      font-weight: bold;
+    }
+
+    #qr-toggle-btn:hover {
+      background: #30363d;
+      color: #fff;
+    }
+
+    #qr-body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 4px;
+      background: #ffffff;
+      border-radius: 6px;
+    }
+
+    #qrcode img, #qrcode canvas {
+      display: block;
+    }
+
+    /* 下半部：摘要區 */
     #bottom-section {
       flex: 0.8;
       border: 2px solid #0284c7;
@@ -159,7 +186,6 @@
 </head>
 <body>
 
-  <!-- 頂部控制列 -->
   <header>
     <div>頻道：<span id="room-display" class="stats-val">----</span> | 總字數：<span id="stat-words" class="stats-val">0</span> | 語速：<span id="stat-wpm" class="stats-val">0</span> 字/分</div>
     <div>
@@ -168,83 +194,68 @@
     </div>
   </header>
 
-  <!-- 主畫面：完全對應範例圖版型 -->
   <main>
-    
-    <!-- 上半部：語音 + 翻譯區 -->
     <section id="top-section">
-      <!-- 右上角 QR Code 區塊 -->
-<div id="qr-box">
-  <div id="qr-header">
-    <span id="qr-title" style="font-size:0.7vw; color:#8b949e;">手機掃碼</span>
-    <button id="qr-toggle-btn" type="button" onclick="toggleQR(event)">隱藏 [-]</button>
-  </div>
-  <div id="qr-content">
-    <div id="qrcode"></div>
-  </div>
-</div>
+      <!-- 右上角 QR Code 卡片 -->
+      <div id="qr-card">
+        <div class="qr-card-header">
+          <span class="qr-card-title">手機掃碼連線</span>
+          <button id="qr-toggle-btn" onclick="toggleQR()">[-]</button>
+        </div>
+        <div id="qr-body">
+          <div id="qrcode"></div>
+        </div>
+      </div>
 
-      <!-- 語音文字 -->
       <div id="speech-text">等待講者連線與語音輸入...</div>
-      <!-- 翻譯文字 -->
       <div id="trans-text"></div>
     </section>
 
-    <!-- 下半部：摘要區 -->
     <section id="bottom-section">
       <div class="summary-title">🤖 AI 即時課堂話題摘要</div>
       <div id="summary-text">重點摘要生成中，將自動擷取課堂精華...</div>
     </section>
-
   </main>
 
   <script>
-    // 1. Firebase 與 Gemini API 設定
+    // 1. Firebase 初始化 (配對你的資料庫網址)
     const firebaseConfig = {
       databaseURL: "https://test-speaker-cb3f5-default-rtdb.asia-southeast1.firebasedatabase.app"
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // 請貼上你的 Gemini API Key
-    const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"; 
-
-    // 2. 房間與 QR Code 生成
+    // 2. 解析房間與產出 QR Code
     const urlParams = new URLSearchParams(window.location.search);
     let roomId = urlParams.get('room') || Math.floor(1000 + Math.random() * 9000).toString();
     document.getElementById('room-display').innerText = roomId;
 
     const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
-    new QRCode(document.getElementById("qrcode"), {
+    const qrcodeContainer = document.getElementById("qrcode");
+    qrcodeContainer.innerHTML = "";
+
+    new QRCode(qrcodeContainer, {
       text: `${baseUrl}/speaker.html?room=${roomId}`,
-      width: 110, height: 110
+      width: 120,
+      height: 120,
+      correctLevel: QRCode.CorrectLevel.H
     });
 
-   // 收合 / 展開 QR Code 按鈕 (已修正開關狀態與顯示邏輯)
-// 預設為展開狀態 (isQRHidden = false)
-let isQRHidden = false;
+    // 縮放 QR Code 控制函式
+    function toggleQR() {
+      const qrBody = document.getElementById('qr-body');
+      const btn = document.getElementById('qr-toggle-btn');
+      
+      if (qrBody.style.display === 'none') {
+        qrBody.style.display = 'flex';
+        btn.innerText = '[-]';
+      } else {
+        qrBody.style.display = 'none';
+        btn.innerText = '[+]';
+      }
+    }
 
-function toggleQR(event) {
-  if (event) event.stopPropagation(); // 防止點擊穿透
-  
-  const qrContent = document.getElementById('qr-content');
-  const btn = document.getElementById('qr-toggle-btn');
-  const title = document.getElementById('qr-title');
-  
-  isQRHidden = !isQRHidden; // 切換狀態
-  
-  if (isQRHidden) {
-    qrContent.style.display = 'none';
-    btn.innerText = '展開 [+]';
-    title.style.display = 'none'; // 縮小時隱藏標題，讓卡片變最小
-  } else {
-    qrContent.style.display = 'block';
-    btn.innerText = '隱藏 [-]';
-    title.style.display = 'inline';
-  }
-}
-
-    // 3. 關鍵字高亮
+    // 3. 關鍵字高亮邏輯
     let customKeywords = [];
     function applyHighlights(text) {
       if(!text) return '';
@@ -258,7 +269,7 @@ function toggleQR(event) {
       return result;
     }
 
-    // 4. 即時語音與高品質 Gemini 翻譯
+    // 4. 即時語音接收與 Gemini 高品質翻譯
     const speechBox = document.getElementById('speech-text');
     const transBox = document.getElementById('trans-text');
 
@@ -268,15 +279,14 @@ function toggleQR(event) {
 
       speechBox.innerHTML = applyHighlights(data.text);
 
-      // 若有啟用翻譯，且講話內容改變，呼叫 Gemini 進行高品質翻譯
-      if (data.needTranslate && GEMINI_API_KEY && GEMINI_API_KEY !== "YOUR_GEMINI_API_KEY") {
+      // 直接調用來自 config.js 的 GEMINI_API_KEY
+      if (data.needTranslate && typeof GEMINI_API_KEY !== 'undefined' && GEMINI_API_KEY) {
         translateWithGemini(data.text, data.targetLang || 'en');
       } else if (!data.needTranslate) {
         transBox.innerText = '';
       }
     });
 
-    // 高品質 Gemini 翻譯函數
     let lastTranslatedText = '';
     async function translateWithGemini(text, targetLang) {
       if (text === lastTranslatedText) return;
@@ -299,7 +309,7 @@ function toggleQR(event) {
       }
     }
 
-    // 5. 語音歷史紀錄與加速 AI 摘要產生
+    // 5. 逐字稿紀錄與即時 AI 摘要
     let fullTranscriptList = [];
     const summaryBox = document.getElementById('summary-text');
 
@@ -310,15 +320,13 @@ function toggleQR(event) {
       fullTranscriptList.push(data.text);
       updateStats(data.text);
 
-      // 加速：每累積滿 3 句話就自動更新重點摘要
       if (fullTranscriptList.length % 3 === 0) {
         generateAISummary();
       }
     });
 
-    // 高品質 Gemini 摘要生成
     async function generateAISummary() {
-      if (!GEMINI_API_KEY || GEMINI_API_KEY === "YOUR_GEMINI_API_KEY") return;
+      if (typeof GEMINI_API_KEY === 'undefined' || !GEMINI_API_KEY) return;
       const recentContext = fullTranscriptList.slice(-10).join('\n');
       
       try {
@@ -338,7 +346,7 @@ function toggleQR(event) {
       }
     }
 
-    // 字數統計
+    // 字數統計與備份匯出
     let totalWordCount = 0;
     let startTime = Date.now();
     function updateStats(text) {
@@ -348,7 +356,6 @@ function toggleQR(event) {
       document.getElementById('stat-wpm').innerText = minutes > 0 ? Math.round(totalWordCount / minutes) : 0;
     }
 
-    // Google 試算表匯入與下載
     function importSheetsKeywords() {
       const url = prompt("請貼上 Google 試算表公開發布的 CSV 網址：");
       if (url) {
