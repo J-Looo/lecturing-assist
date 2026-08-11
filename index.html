@@ -55,7 +55,7 @@
     body {
       background-color: var(--bg-body); color: var(--color-text);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang TC", "Microsoft JhengHei", sans-serif;
-      height: 100vh; display: flex; flex-direction: column; padding: 1.2vw;
+      height: auto; min-height: 100vh; display: flex; flex-direction: column; padding: 1.2vw;
       justify-content: space-between; overflow-y: auto;
       transition: background-color 0.2s, color 0.2s;
     }
@@ -91,16 +91,18 @@
     }
     .btn:hover { background: var(--border-color); color: var(--bg-body); }
 
-    main { flex: 1; display: flex; flex-direction: column; gap: 1.2vw; margin-top: 1vw; overflow: hidden; }
+    main { display: flex; flex-direction: column; gap: 1.2vw; margin-top: 1vw; overflow: visible; }
 
-    #translate-container { flex: 1; display: flex; flex-direction: column; gap: 1vw; position: relative; }
+    #translate-container { display: flex; flex-direction: column; gap: 1.2vw; position: relative; }
 
     .trans-box {
-      flex: 1; background: var(--bg-box-speech); border: 1px solid var(--border-color); border-radius: 12px;
+      flex: none;
+      height: 42vh;
+      min-height: 380px;
+      background: var(--bg-box-speech); border: 1px solid var(--border-color); border-radius: 12px;
       padding: 1.2vw 1.8vw; display: flex; flex-direction: column; position: relative;
       box-shadow: var(--shadow);
       justify-content: space-between;
-      min-height: 80px;
       transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
     }
     
@@ -310,6 +312,10 @@
       0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
       40% { transform: scale(1); opacity: 1; }
     }
+    @keyframes flash-bg {
+      0% { background: rgba(220, 38, 38, 0.2); }
+      100% { background: rgba(220, 38, 38, 0.65); }
+    }
   </style>
 </head>
 <body>
@@ -319,6 +325,8 @@
     <div>
       <button class="btn" id="theme-toggle-btn" onclick="toggleTheme()">☀️ 淺色主題</button>
       <button class="btn" onclick="openKeyModal()">⚙️ 設定 Groq 金鑰</button>
+      <button class="btn" onclick="document.getElementById('bell-file-input').click()">🔔 設置自訂鈴聲 (MP3/WAV)</button>
+      <input type="file" id="bell-file-input" style="display: none;" accept="audio/*" onchange="handleBellUpload(event)">
       <button class="btn" onclick="document.getElementById('keyword-file-input').click()">📁 匯入關鍵字檔案 (.csv/.xlsx/.xls)</button>
       <input type="file" id="keyword-file-input" style="display: none;" accept=".csv,.xlsx,.xls" onchange="handleKeywordUpload(event)">
       <button class="btn" style="background:#238636; color:#fff; border-color:#238636;" onclick="downloadTranscript()">下載逐字稿</button>
@@ -406,6 +414,27 @@
     </div>
   </div>
 
+  <!-- 噪音偵測警告遮罩 -->
+  <div id="noise-alert-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(220, 38, 38, 0.45); backdrop-filter: blur(10px); z-index: 9999; justify-content: center; align-items: center; pointer-events: none; animation: flash-bg 1s infinite alternate;">
+    <div style="font-size: 8vw; font-weight: 900; color: #fff; text-shadow: 0 0 30px rgba(0,0,0,0.8); text-align: center; font-family: Impact, 'Microsoft JhengHei', sans-serif;">
+      ⚠️ 聲音太大囉！請保持安靜 ⚠️
+    </div>
+  </div>
+
+  <!-- AI 提問漂浮大對話框 (大字體) -->
+  <div id="ai-qna-card" style="display: none; position: fixed; top: 10vh; left: 10vw; width: 80vw; height: 75vh; background: var(--bg-modal); border: 4px solid #38bdf8; border-radius: 24px; padding: 3vw; box-shadow: 0 20px 80px rgba(0,0,0,0.8); z-index: 2000; flex-direction: column; gap: 2vh; box-sizing: border-box; overflow: hidden; transition: background 0.2s, border-color 0.2s;">
+    <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid var(--border-color); padding-bottom: 1.5vh;">
+      <span style="font-size: 2.2vw; font-weight: bold; color: #38bdf8; display: flex; align-items: center; gap: 10px;">🤖 課堂 AI 語音問答</span>
+      <button class="btn" style="background:#da3633; color:#fff; border:none; padding: 0.5vw 1.2vw; border-radius: 8px; font-size: 1.2vw; cursor: pointer;" onclick="db.ref('rooms/' + roomId + '/ai_qna').remove()">關閉投影</button>
+    </div>
+    <div style="font-size: 2.8vw; font-weight: 800; color: var(--color-speech); word-break: break-word; line-height: 1.3; overflow-y: auto; max-height: 20vh;">
+      老師提問：<span id="ai-qna-question">...</span>
+    </div>
+    <div id="ai-qna-answer-box" style="flex: 1; font-size: 2.6vw; color: var(--color-trans); word-break: break-word; line-height: 1.4; border-top: 2px dashed var(--border-color); padding-top: 2vh; overflow-y: auto; min-height: 100px;">
+      AI 正在分析並編寫回答中...
+    </div>
+  </div>
+
   <script>
     // --- 題目切換與初始化邏輯 ---
     function toggleTheme() {
@@ -432,6 +461,194 @@
         });
       }
     })();
+
+    // --- IndexedDB 音檔儲存與讀取邏輯 ---
+    const dbName = "BellAudioDB";
+    const storeName = "audioStore";
+    let bellDB = null;
+
+    function initIndexedDB() {
+      try {
+        const request = indexedDB.open(dbName, 1);
+        request.onupgradeneeded = function(e) {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(storeName)) {
+            db.createObjectStore(storeName);
+          }
+        };
+        request.onsuccess = function(e) {
+          bellDB = e.target.result;
+        };
+        request.onerror = function(e) {
+          console.error("IndexedDB 初始化失敗:", e);
+        };
+      } catch (err) {
+        console.error("IndexedDB 啟動失敗:", err);
+      }
+    }
+    initIndexedDB(); // 啟動本地音訊資料庫
+
+    function saveCustomBell(blob) {
+      if (!bellDB) return alert("瀏覽器資料庫未就緒，無法儲存音檔！");
+      try {
+        const transaction = bellDB.transaction([storeName], "readwrite");
+        const store = transaction.objectStore(storeName);
+        const request = store.put(blob, "custom_bell");
+        request.onsuccess = function() {
+          alert("自訂鈴聲音檔上傳並儲存成功！");
+        };
+        request.onerror = function(e) {
+          console.error("音檔儲存失敗:", e);
+          alert("音檔儲存失敗！");
+        };
+      } catch (err) {
+        console.error("儲存過程出錯:", err);
+      }
+    }
+
+    function getCustomBell(callback) {
+      if (!bellDB) return callback(null);
+      try {
+        const transaction = bellDB.transaction([storeName], "readonly");
+        const store = transaction.objectStore(storeName);
+        const request = store.get("custom_bell");
+        request.onsuccess = function(e) {
+          callback(e.target.result || null);
+        };
+        request.onerror = function() {
+          callback(null);
+        };
+      } catch (err) {
+        callback(null);
+      }
+    }
+
+    function handleBellUpload(event) {
+      const file = event.target.files[0];
+      if (file) {
+        saveCustomBell(file);
+      }
+    }
+
+    function playBell() {
+      getCustomBell((blob) => {
+        if (blob) {
+          try {
+            const url = URL.createObjectURL(blob);
+            const audio = new Audio(url);
+            audio.play().catch(err => console.error("自訂音檔播放失敗:", err));
+          } catch (e) {
+            console.error("無法播音，改使用預設音效:", e);
+            playDefaultAirHorn();
+          }
+        } else {
+          playDefaultAirHorn();
+        }
+      });
+    }
+
+    function playDefaultAirHorn() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioCtx();
+        
+        const osc1 = audioCtx.createOscillator();
+        const osc2 = audioCtx.createOscillator();
+        const osc3 = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+
+        osc1.type = 'sawtooth';
+        osc2.type = 'sawtooth';
+        osc3.type = 'sawtooth';
+
+        osc1.frequency.value = 150;
+        osc2.frequency.value = 220;
+        osc3.frequency.value = 330;
+
+        gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.8, audioCtx.currentTime + 0.05);
+        gainNode.gain.linearRampToValueAtTime(0.8, audioCtx.currentTime + 0.8);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.2);
+
+        osc1.connect(gainNode);
+        osc2.connect(gainNode);
+        osc3.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        osc1.start();
+        osc2.start();
+        osc3.start();
+
+        osc1.stop(audioCtx.currentTime + 1.2);
+        osc2.stop(audioCtx.currentTime + 1.2);
+        osc3.stop(audioCtx.currentTime + 1.2);
+      } catch (err) {
+        console.error("Web Audio API 播音失敗:", err);
+      }
+    }
+
+    // --- Groq Q&A 對答核心請求與語音播放 ---
+    async function askGroqAI(question, apiKey) {
+      const url = "https://api.groq.com/openai/v1/chat/completions";
+      const payload = {
+        model: "llama-3.3-70b-specdec",
+        messages: [
+          {
+            role: "system",
+            content: "你是一個國中小課堂助教 AI。請使用簡短、清晰、生動有趣、適合學生的繁體中文來回答老師的問題。字數限制在 120 字以內，非常適合投影在教室大螢幕上供學生全班閱讀。"
+          },
+          {
+            role: "user",
+            content: question
+          }
+        ],
+        max_tokens: 250,
+        temperature: 0.7
+      };
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        if (response.status === 404 || response.status === 400) {
+          payload.model = "llama3-70b-8192";
+          const retryResponse = await fetch(url, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${apiKey}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+          });
+          if (retryResponse.ok) {
+            const data = await retryResponse.json();
+            return data.choices[0].message.content.trim();
+          }
+        }
+        throw new Error(`Groq API 錯誤: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.choices[0].message.content.trim();
+    }
+
+    function speakQnAReply(text) {
+      if (!('speechSynthesis' in window)) return;
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'zh-TW';
+        window.speechSynthesis.speak(utterance);
+      } catch (e) {
+        console.error("語音發音朗讀失敗:", e);
+      }
+    }
 
     // 1. 初始化 Firebase 軟容錯
     let db = null;
@@ -620,238 +837,4 @@
         scaledSize = baseSize * Math.max(0.65, 1 - (overflow * 0.003));
       }
       
-      // 限制最小字體不可低於 2.2vw，最大不可高於原本設定的 baseSize
-      const minReadableSize = 2.2; 
-      scaledSize = Math.max(minReadableSize, Math.min(scaledSize, baseSize));
-      
-      element.style.fontSize = scaledSize + 'vw';
-      
-      // 自動滾動到最底部
-      setTimeout(() => {
-        const parent = element.parentElement;
-        if (parent) {
-          parent.scrollTop = parent.scrollHeight;
-        }
-      }, 10);
-    }
-
-    // --- Groq API & 金鑰管理邏輯 ---
-    function openKeyModal() {
-      const modal = document.getElementById('key-modal');
-      const input = document.getElementById('groq-key-input');
-      if (modal && input) {
-        input.value = localStorage.getItem('groq_api_key') || '';
-        modal.style.display = 'flex';
-        setTimeout(() => modal.classList.add('active'), 10);
-      }
-    }
-
-    function closeKeyModal() {
-      const modal = document.getElementById('key-modal');
-      if (modal) {
-        modal.classList.remove('active');
-        setTimeout(() => modal.style.display = 'none', 250);
-      }
-    }
-
-    function closeKeyModalOnOuterClick(e) {
-      if (e.target.id === 'key-modal') {
-        closeKeyModal();
-      }
-    }
-
-    function saveGroqKey() {
-      const valInput = document.getElementById('groq-key-input');
-      const val = valInput ? valInput.value.trim() : '';
-      if (val) {
-        localStorage.setItem('groq_api_key', val);
-        if (db) {
-          db.ref(`rooms/${roomId}/groq_key`).set(val);
-        }
-        alert('Groq API 金鑰儲存成功，且已自動同步至發話端！');
-      } else {
-        localStorage.removeItem('groq_api_key');
-        if (db) {
-          db.ref(`rooms/${roomId}/groq_key`).remove();
-        }
-        alert('已清除 Groq API 金鑰。');
-      }
-      closeKeyModal();
-      checkKeyStatus();
-    }
-
-    function getLangCode(lang) {
-      if (!lang) return '';
-      const l = lang.toLowerCase().trim();
-      if (l.includes('zh-tw') || l.includes('繁體中文') || l.includes('traditional') || l.includes('中文 / 中英夾雜') || l.includes('中文')) return 'zh-TW';
-      if (l.includes('zh-cn') || l.includes('简体中文') || l.includes('simplified')) return 'zh-CN';
-      if (l.includes('en') || l.includes('英文') || l.includes('english')) return 'en';
-      if (l.includes('ja') || l.includes('日') || l.includes('japanese')) return 'ja';
-      if (l.includes('ko') || l.includes('韓') || l.includes('korean')) return 'ko';
-      if (l.includes('es') || l.includes('西') || l.includes('spanish')) return 'es';
-      if (l.includes('fr') || l.includes('法') || l.includes('french')) return 'fr';
-      if (l.includes('de') || l.includes('德') || l.includes('german')) return 'de';
-      return l;
-    }
-
-    function checkKeyStatus() {
-      if (transBox && transBox.innerText === '等待翻譯服務串接...') {
-        updateBoxText('trans-text', '等待語音輸入...');
-      }
-    }
-
-    // Debounce 防抖動函數
-    function debounce(func, delay) {
-      let timer;
-      return function (...args) {
-        clearTimeout(timer);
-        timer = setTimeout(() => func.apply(this, args), delay);
-      };
-    }
-
-    let lastTranslatedText = '';
-
-    // 呼叫 Google 翻譯免金鑰 API 進行翻譯
-    async function translateText(text, sourceLang, targetLangName) {
-      const cleanText = text ? text.trim() : '';
-      if (!cleanText || cleanText === lastTranslatedText) return;
-
-      // 顯示翻譯中動畫
-      updateBoxText('trans-text', '<div class="loading-dots"><span></span><span></span><span></span><span style="font-size: 1vw; margin-left: 8px; color: #8b949e;">翻譯中...</span></div>', true);
-
-      try {
-        const sourceLangCode = getLangCode(sourceLang) || 'auto';
-        const targetLangCode = getLangCode(targetLangName) || 'zh-TW';
-        
-        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sourceLangCode}&tl=${targetLangCode}&dt=t&q=${encodeURIComponent(cleanText)}`;
-
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error(`Google 翻譯回應異常: ${response.status}`);
-        }
-
-        const data = await response.json();
-        let translated = '';
-        if (data && data[0]) {
-          data[0].forEach(item => {
-            if (item && item[0]) {
-              translated += item[0];
-            }
-          });
-        }
-
-        if (translated) {
-          lastTranslatedText = cleanText;
-          updateBoxText('trans-text', translated);
-        } else {
-          updateBoxText('trans-text', '翻譯結果為空');
-        }
-      } catch (err) {
-        console.error('Translation failed:', err);
-        updateBoxText('trans-text', `<span style="color:#ef4444; font-size:1.5vw;">翻譯失敗: ${err.message}</span>`, true);
-      }
-    }
-
-    // 建立防抖動版本的翻譯函數
-    const debouncedTranslate = debounce((text, sourceLang, targetLangName) => {
-      translateText(text, sourceLang, targetLangName);
-    }, 600);
-
-    // --- Firebase 資料監聽與原有功能 ---
-    if (db) {
-      // 監聽 Firebase 實時語音輸入
-      db.ref(`rooms/${roomId}/speech_live`).on('value', (snapshot) => {
-        const data = snapshot.val();
-        if (!data || !data.text) return;
-
-        updateBoxText('speech-text', applyHighlights(data.text), true);
-
-        let sourceLangVal = '';
-        let targetLangNameVal = '';
-
-        const sLabel = document.getElementById('source-lang-label');
-        const tLabel = document.getElementById('target-lang-label');
-
-        if (data.sourceLang) {
-          if (sLabel) sLabel.innerText = `(${data.sourceLang})`;
-          sourceLangVal = data.sourceLang;
-        }
-        if (data.targetLangName) {
-          if (tLabel) tLabel.innerText = `(${data.targetLangName})`;
-          targetLangNameVal = data.targetLangName;
-        }
-
-        // 觸發翻譯
-        debouncedTranslate(data.text, sourceLangVal, targetLangNameVal);
-      });
-    }
-
-    let fullTranscriptList = [];
-    if (db) {
-      // 監聽逐字稿歷史紀錄
-      db.ref(`rooms/${roomId}/speech_history`).on('child_added', (snapshot) => {
-        const data = snapshot.val();
-        if (!data || !data.text) return;
-
-        fullTranscriptList.push(data.text);
-        updateStats(data.text);
-      });
-    }
-
-    let totalWordCount = 0;
-    let startTime = Date.now();
-    function updateStats(text) {
-      if (!text) return;
-      totalWordCount += text.trim().length;
-      const minutes = (Date.now() - startTime) / 60000;
-      const sWords = document.getElementById('stat-words');
-      const sWpm = document.getElementById('stat-wpm');
-      if (sWords) sWords.innerText = totalWordCount;
-      if (sWpm) sWpm.innerText = minutes > 0 ? Math.round(totalWordCount / minutes) : 0;
-    }
-
-    function handleKeywordUpload(event) {
-      if (typeof XLSX === 'undefined') {
-        return alert("試算表解析套件尚未載入，請稍後再試！");
-      }
-      const file = event.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        try {
-          const data = new Uint8Array(e.target.result);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-          
-          customKeywords = sheetData.flat()
-            .map(cell => cell ? cell.toString().trim() : '')
-            .filter(Boolean);
-          
-          alert(`成功自檔案匯入 ${customKeywords.length} 個關鍵字！`);
-          event.target.value = ''; // 重設以便可重複上傳
-        } catch (err) {
-          console.error("檔案解析失敗:", err);
-          alert(`檔案解析失敗: ${err.message}`);
-        }
-      };
-      reader.readAsArrayBuffer(file);
-    }
-
-    function downloadTranscript() {
-      if (fullTranscriptList.length === 0) return alert("目前尚無講話紀錄！");
-      const text = `--- 課堂逐字稿 (${roomId}) ---\n\n` + fullTranscriptList.join('\n');
-      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `課堂逐字稿_${roomId}.txt`;
-      a.click();
-    }
-
-    // 初始化檢查金鑰狀態
-    window.addEventListener('DOMContentLoaded', checkKeyStatus);
-  </script>
-</body>
-</html>
+      // 限制最小字體不可低於 2.2vw
