@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>演講現場大螢幕字幕牆</title>
+  <!-- 引入 QR Code 生成套件與 Firebase SDK -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #08090a;
+      color: #f0f6fc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang TC", "Microsoft JhengHei", sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 4vw;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* 右上角 QR Code 與控制卡片 */
+    #qr-card {
+      position: absolute;
+      top: 2vw;
+      right: 2vw;
+      background: rgba(22, 27, 34, 0.85);
+      border: 1px solid #30363d;
+      backdrop-filter: blur(10px);
+      padding: 1vw;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5vw;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      z-index: 100;
+    }
+    #qrcode {
+      background: #fff;
+      padding: 8px;
+      border-radius: 6px;
+    }
+    #qrcode img { display: block; }
+    .room-info {
+      font-size: 1.2vw;
+      color: #8b949e;
+      font-weight: 600;
+    }
+    .room-code {
+      color: #58a6ff;
+    }
+
+    /* 歷史句子（較小、半透明，自動向上推） */
+    #history-container {
+      display: flex;
+      flex-direction: column;
+      gap: 1.2rem;
+      margin-bottom: 2rem;
+      max-height: 35vh;
+      overflow: hidden;
+      opacity: 0.5;
+    }
+    .history-item {
+      font-size: 2.8vw;
+      line-height: 1.4;
+      color: #c9d1d9;
+      animation: fadeInUp 0.3s ease-out;
+    }
+
+    /* 當前正在講的句子（超大字體、高亮亮藍色） */
+    #current-sentence {
+      font-size: 5.5vw;
+      font-weight: 800;
+      line-height: 1.3;
+      color: #38bdf8;
+      text-shadow: 0 0 35px rgba(56, 189, 248, 0.35);
+      min-height: 2.6em;
+      word-break: break-word;
+      transition: color 0.2s ease;
+    }
+    .interim {
+      color: #93c5fd;
+      font-style: italic;
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(15px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 右上角 QR Code 控制區 -->
+  <div id="qr-card">
+    <div id="qrcode"></div>
+    <div class="room-info">手機掃碼開啟控制台</div>
+    <div class="room-info">房間頻道：<span id="room-display" class="room-code">----</span></div>
+  </div>
+
+  <!-- 主畫面字幕區 -->
+  <div id="history-container"></div>
+  <div id="current-sentence" class="interim">等待講者連線開口...</div>
+
+  <script>
+    // 1. 初始化 Firebase (已填入你的 Realtime Database 網址)
+    const firebaseConfig = {
+      databaseURL: "https://test-speaker-cb3f5-default-rtdb.asia-southeast1.firebasedatabase.app"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // 2. 解析或自動生成房間號碼 (?room=1234)
+    const urlParams = new URLSearchParams(window.location.search);
+    let roomId = urlParams.get('room');
+    if (!roomId) {
+      roomId = Math.floor(1000 + Math.random() * 9000).toString(); // 隨機 4 位數
+      const newUrl = `${window.location.pathname}?room=${roomId}`;
+      window.history.replaceState(null, '', newUrl);
+    }
+    document.getElementById('room-display').innerText = roomId;
+
+    // 3. 自動動態拼接同目錄下的 speaker.html 網址並生成 QR Code
+    const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
+    const speakerUrl = `${baseUrl}/speaker.html?room=${roomId}`;
+
+    new QRCode(document.getElementById("qrcode"), {
+      text: speakerUrl,
+      width: 140,
+      height: 140,
+      colorDark : "#000000",
+      colorLight : "#ffffff",
+      correctLevel : QRCode.CorrectLevel.H
+    });
+
+    // 4. 監聽 Firebase 即時語音文字
+    const currentBox = document.getElementById('current-sentence');
+    const historyContainer = document.getElementById('history-container');
+
+    // 監聽即時講話內容
+    db.ref(`rooms/${roomId}/speech_live`).on('value', (snapshot) => {
+      const data = snapshot.val();
+      if (!data || !data.text) return;
+
+      currentBox.innerText = data.text;
+      if (data.isFinal) {
+        currentBox.classList.remove('interim');
+      } else {
+        currentBox.classList.add('interim');
+      }
+    });
+
+    // 監聽歷史句子歸檔 (最多保留 3 句推移顯示)
+    db.ref(`rooms/${roomId}/speech_history`).limitToLast(3).on('child_added', (snapshot) => {
+      const data = snapshot.val();
+      if (!data || !data.text) return;
+
+      const item = document.createElement('div');
+      item.className = 'history-item';
+      item.innerText = data.text;
+      
+      historyContainer.appendChild(item);
+      if (historyContainer.children.length > 3) {
+        historyContainer.removeChild(historyContainer.firstChild);
+      }
+    });
+  </script>
+</body>
+</html>
