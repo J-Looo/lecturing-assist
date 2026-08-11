@@ -8,44 +8,110 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <style>
+    :root {
+      /* 深色主題變數 */
+      --bg-body: #0d0f12;
+      --color-text: #e3e8f0;
+      --bg-header: #161b22;
+      --border-color: #30363d;
+      --color-muted: #8b949e;
+      --bg-btn: #21262d;
+      --color-btn: #c9d1d9;
+      --bg-box-speech: #161b22;
+      --bg-box-trans: #111827;
+      --color-speech: #ffffff;
+      --color-trans: #facc15;
+      --bg-modal: #161b22;
+      --bg-input: #0d0f12;
+      --shadow: 0 4px 20px rgba(0,0,0,0.3);
+      --bg-scrollbar-track: #0d0f12;
+      --bg-scrollbar-thumb: #30363d;
+    }
+
+    body.light-theme {
+      /* 淺色主題變數 */
+      --bg-body: #f3f4f6;
+      --color-text: #1f2937;
+      --bg-header: #ffffff;
+      --border-color: #d1d5db;
+      --color-muted: #4b5563;
+      --bg-btn: #ffffff;
+      --color-btn: #374151;
+      --bg-box-speech: #ffffff;
+      --bg-box-trans: #f9fafb;
+      --color-speech: #111827;
+      --color-trans: #0369a1; /* 深藍/天藍色，方便在白底閱讀 */
+      --bg-modal: #ffffff;
+      --bg-input: #f3f4f6;
+      --shadow: 0 4px 20px rgba(0,0,0,0.06);
+      --bg-scrollbar-track: #f3f4f6;
+      --bg-scrollbar-thumb: #cbd5e1;
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background-color: #0d0f12; color: #e3e8f0;
+      background-color: var(--bg-body); color: var(--color-text);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang TC", "Microsoft JhengHei", sans-serif;
       height: 100vh; display: flex; flex-direction: column; padding: 1.2vw;
-      justify-content: space-between; overflow: hidden;
+      justify-content: space-between; overflow-y: auto;
+      transition: background-color 0.2s, color 0.2s;
+    }
+
+    /* 全局網頁右側滾動條樣式 */
+    ::-webkit-scrollbar {
+      width: 12px;
+      height: 12px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg-scrollbar-track);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--bg-scrollbar-thumb);
+      border: 3px solid var(--bg-scrollbar-track);
+      border-radius: 6px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #38bdf8;
     }
 
     header {
       display: flex; justify-content: space-between; align-items: center;
-      background: #161b22; border: 1px solid #30363d; padding: 0.6vw 1.2vw;
-      border-radius: 8px; font-size: 0.85vw; color: #8b949e;
+      background: var(--bg-header); border: 1px solid var(--border-color); padding: 0.6vw 1.2vw;
+      border-radius: 8px; font-size: 0.85vw; color: var(--color-muted);
+      transition: background 0.2s, border-color 0.2s;
     }
     .stats-val { color: #38bdf8; font-weight: bold; }
     .btn {
-      background: #21262d; border: 1px solid #30363d; color: #c9d1d9;
+      background: var(--bg-btn); border: 1px solid var(--border-color); color: var(--color-btn);
       padding: 0.3vw 0.6vw; border-radius: 4px; cursor: pointer; font-size: 0.85vw;
+      transition: all 0.2s ease;
     }
-    .btn:hover { background: #30363d; color: #fff; }
+    .btn:hover { background: var(--border-color); color: var(--bg-body); }
 
     main { flex: 1; display: flex; flex-direction: column; gap: 1.2vw; margin-top: 1vw; overflow: hidden; }
 
     #translate-container { flex: 1; display: flex; flex-direction: column; gap: 1vw; position: relative; }
 
     .trans-box {
-      flex: 1; background: #161b22; border: 1px solid #30363d; border-radius: 12px;
+      flex: 1; background: var(--bg-box-speech); border: 1px solid var(--border-color); border-radius: 12px;
       padding: 1.2vw 1.8vw; display: flex; flex-direction: column; position: relative;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      box-shadow: var(--shadow);
       justify-content: space-between;
       min-height: 80px;
+      transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+    }
+    
+    .trans-box:nth-of-type(2) {
+      background: var(--bg-box-trans);
     }
 
     .box-header {
       display: flex; align-items: center; gap: 8px; font-size: 1.1vw;
       font-weight: 600; color: #38bdf8; margin-bottom: 0.5vw;
-      border-bottom: 1px solid #21262d; padding-bottom: 0.5vw;
+      border-bottom: 1px solid var(--border-color); padding-bottom: 0.5vw;
     }
 
     .box-content {
@@ -56,7 +122,7 @@
     }
 
     #speech-text {
-      color: #ffffff;
+      color: var(--color-speech);
       text-shadow: 0 0 15px rgba(255,255,255,0.1);
       margin: auto 0;
       font-size: 3.5vw;
@@ -66,19 +132,12 @@
     }
     
     #trans-text {
-      color: #facc15;
+      color: var(--color-trans);
       margin: auto 0;
       font-size: 3.5vw;
       font-weight: 700;
       line-height: 1.25;
       word-break: break-word;
-    }
-
-    .swap-icon {
-      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-      background: #21262d; border: 1px solid #444c56; color: #38bdf8;
-      width: 2.8vw; height: 2.8vw; border-radius: 50%; display: flex;
-      align-items: center; justify-content: center; font-size: 1.4vw; z-index: 10;
     }
 
     /* 網頁側邊高對比滾動條 (Scrollbar) 樣式，便於拖曳與滑動 */
@@ -87,12 +146,12 @@
       height: 10px;
     }
     .box-content::-webkit-scrollbar-track {
-      background: #161b22;
+      background: var(--bg-box-speech);
       border-radius: 5px;
     }
     .box-content::-webkit-scrollbar-thumb {
-      background: #444c56;
-      border: 2px solid #161b22;
+      background: var(--bg-btn);
+      border: 2px solid var(--bg-box-speech);
       border-radius: 5px;
     }
     .box-content::-webkit-scrollbar-thumb:hover {
@@ -100,12 +159,13 @@
     }
 
     #qr-card {
-      position: absolute; top: 1vw; right: 1vw; background: #161b22;
-      border: 1px solid #444c56; border-radius: 8px; padding: 8px;
+      position: absolute; top: 1vw; right: 1vw; background: var(--bg-header);
+      border: 1px solid var(--border-color); border-radius: 8px; padding: 8px;
       display: flex; flex-direction: column; align-items: center; z-index: 50;
+      transition: background 0.2s, border-color 0.2s;
     }
     .qr-card-header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-    #qr-toggle-btn { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; border-radius: 3px; cursor: pointer; padding: 1px 5px; font-size: 0.7vw; }
+    #qr-toggle-btn { background: var(--bg-btn); border: 1px solid var(--border-color); color: var(--color-btn); border-radius: 3px; cursor: pointer; padding: 1px 5px; font-size: 0.7vw; }
     #qr-body { background: #fff; padding: 4px; border-radius: 4px; }
 
     .highlight { background: #854d0e; color: #fef08a; padding: 0 4px; border-radius: 4px; }
@@ -116,7 +176,7 @@
       justify-content: space-between;
       align-items: center;
       margin-top: 0.5vw;
-      border-top: 1px solid #21262d;
+      border-top: 1px solid var(--border-color);
       padding-top: 0.6vw;
     }
     .footer-btn-group {
@@ -127,7 +187,7 @@
     .icon-btn {
       background: none;
       border: none;
-      color: #8b949e;
+      color: var(--color-muted);
       cursor: pointer;
       width: 2.2vw;
       height: 2.2vw;
@@ -139,7 +199,7 @@
       outline: none;
     }
     .icon-btn:hover {
-      background: #21262d;
+      background: var(--bg-btn);
       color: #38bdf8;
     }
     .icon-btn:active {
@@ -152,16 +212,17 @@
     .font-btn {
       font-size: 0.8vw;
       font-weight: 700;
-      border: 1px solid #30363d;
+      border: 1px solid var(--border-color);
       border-radius: 6px;
       padding: 0.1vw 0.5vw;
       width: auto;
       height: auto;
-      color: #c9d1d9;
+      color: var(--color-btn);
+      transition: all 0.2s ease;
     }
     .font-btn:hover {
-      background: #30363d;
-      color: #fff;
+      background: var(--border-color);
+      color: var(--bg-body);
     }
     
     /* 播放發音呼吸動畫 */
@@ -186,7 +247,7 @@
       display: flex; opacity: 1;
     }
     .modal-content {
-      background: #161b22; border: 1px solid #30363d; border-radius: 16px;
+      background: var(--bg-modal); border: 1px solid var(--border-color); border-radius: 16px;
       width: 90%; max-width: 480px; padding: 2vw; box-shadow: 0 20px 40px rgba(0,0,0,0.6);
       transform: scale(0.9); transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
       display: flex; flex-direction: column; gap: 1.5vw;
@@ -196,23 +257,23 @@
     }
     .modal-header {
       display: flex; justify-content: space-between; align-items: center;
-      border-bottom: 1px solid #21262d; padding-bottom: 0.8vw;
+      border-bottom: 1px solid var(--border-color); padding-bottom: 0.8vw;
     }
     .modal-title {
       font-size: 1.2vw; font-weight: 700; color: #38bdf8;
       display: flex; align-items: center; gap: 8px;
     }
     .modal-close {
-      background: none; border: none; color: #8b949e; cursor: pointer; font-size: 1.5vw;
+      background: none; border: none; color: var(--color-muted); cursor: pointer; font-size: 1.5vw;
       line-height: 1; transition: color 0.2s;
     }
-    .modal-close:hover { color: #f3f4f6; }
+    .modal-close:hover { color: var(--color-text); }
     
     .modal-body {
       display: flex; flex-direction: column; gap: 1vw;
     }
     .modal-body p {
-      font-size: 0.85vw; color: #8b949e; line-height: 1.5;
+      font-size: 0.85vw; color: var(--color-muted); line-height: 1.5;
     }
     .modal-link {
       color: #38bdf8; text-decoration: none; border-bottom: 1px dashed #38bdf8;
@@ -222,8 +283,8 @@
       color: #0ea5e9; border-bottom-style: solid;
     }
     .input-field {
-      width: 100%; background: #0d0f12; border: 1px solid #30363d;
-      border-radius: 8px; padding: 0.8vw 1vw; color: #fff; font-size: 0.9vw;
+      width: 100%; background: var(--bg-input); border: 1px solid var(--border-color);
+      border-radius: 8px; padding: 0.8vw 1vw; color: var(--color-text); font-size: 0.9vw;
       outline: none; transition: border-color 0.2s, box-shadow: 0.2s;
     }
     .input-field:focus {
@@ -232,7 +293,7 @@
     }
     .modal-footer {
       display: flex; justify-content: flex-end; gap: 1vw;
-      border-top: 1px solid #21262d; padding-top: 0.8vw;
+      border-top: 1px solid var(--border-color); padding-top: 0.8vw;
     }
 
     /* 翻譯中動畫 loading-dots */
@@ -240,7 +301,7 @@
       display: inline-flex; gap: 6px; align-items: center;
     }
     .loading-dots span {
-      width: 0.8vw; height: 0.8vw; background-color: #facc15; border-radius: 50%;
+      width: 0.8vw; height: 0.8vw; background-color: var(--color-trans); border-radius: 50%;
       display: inline-block; animation: bounce 1.4s infinite ease-in-out both;
     }
     .loading-dots span:nth-child(1) { animation-delay: -0.32s; }
@@ -256,9 +317,11 @@
   <header>
     <div>頻道：<span id="room-display" class="stats-val">----</span> | 總字數：<span id="stat-words" class="stats-val">0</span> | 語速：<span id="stat-wpm" class="stats-val">0</span> 字/分</div>
     <div>
+      <button class="btn" id="theme-toggle-btn" onclick="toggleTheme()">☀️ 淺色主題</button>
       <button class="btn" onclick="openKeyModal()">⚙️ 設定 Groq 金鑰</button>
-      <button class="btn" onclick="importSheetsKeywords()">匯入 Google 試算表關鍵字</button>
-      <button class="btn" style="background:#238636; color:#fff;" onclick="downloadTranscript()">下載逐字稿</button>
+      <button class="btn" onclick="document.getElementById('keyword-file-input').click()">📁 匯入關鍵字檔案 (.csv/.xlsx/.xls)</button>
+      <input type="file" id="keyword-file-input" style="display: none;" accept=".csv,.xlsx,.xls" onchange="handleKeywordUpload(event)">
+      <button class="btn" style="background:#238636; color:#fff; border-color:#238636;" onclick="downloadTranscript()">下載逐字稿</button>
     </div>
   </header>
 
@@ -271,7 +334,6 @@
         </div>
         <div id="qr-body"><div id="qrcode"></div></div>
       </div>
-      <div class="swap-icon">⇅</div>
 
       <div class="trans-box">
         <div class="box-header">
@@ -298,7 +360,7 @@
         </div>
       </div>
 
-      <div class="trans-box" style="background: #111827;">
+      <div class="trans-box">
         <div class="box-header" style="color: #facc15;">
           <span>🌐 即時校正與翻譯</span>
           <span id="target-lang-label" style="font-size:0.8vw; color:#8b949e; margin-left:auto;">(繁體中文)</span>
@@ -345,6 +407,32 @@
   </div>
 
   <script>
+    // --- 題目切換與初始化邏輯 ---
+    function toggleTheme() {
+      const body = document.body;
+      const btn = document.getElementById('theme-toggle-btn');
+      if (body.classList.contains('light-theme')) {
+        body.classList.remove('light-theme');
+        if (btn) btn.innerText = '☀️ 淺色主題';
+        localStorage.setItem('theme', 'dark');
+      } else {
+        body.classList.add('light-theme');
+        if (btn) btn.innerText = '🌙 深色主題';
+        localStorage.setItem('theme', 'light');
+      }
+    }
+
+    (function initTheme() {
+      const savedTheme = localStorage.getItem('theme') || 'dark';
+      if (savedTheme === 'light') {
+        document.body.classList.add('light-theme');
+        window.addEventListener('DOMContentLoaded', () => {
+          const btn = document.getElementById('theme-toggle-btn');
+          if (btn) btn.innerText = '🌙 深色主題';
+        });
+      }
+    })();
+
     // 1. 初始化 Firebase 軟容錯
     let db = null;
     try {
@@ -722,20 +810,34 @@
       if (sWpm) sWpm.innerText = minutes > 0 ? Math.round(totalWordCount / minutes) : 0;
     }
 
-    function importSheetsKeywords() {
-      const url = prompt("請貼上 Google 試算表公開發布的 CSV 網址：");
-      if (url) {
-        fetch(url)
-          .then(res => res.text())
-          .then(data => {
-            customKeywords = data.split(/\r?\n/).flatMap(row => row.split(',')).map(k => k.trim()).filter(Boolean);
-            alert(`成功匯入 ${customKeywords.length} 個關鍵字！`);
-          })
-          .catch(err => {
-            alert("關鍵字匯入失敗，請確認網址與 CSV 發布設定。");
-            console.error("CSV Fetch Error:", err);
-          });
+    function handleKeywordUpload(event) {
+      if (typeof XLSX === 'undefined') {
+        return alert("試算表解析套件尚未載入，請稍後再試！");
       }
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          
+          customKeywords = sheetData.flat()
+            .map(cell => cell ? cell.toString().trim() : '')
+            .filter(Boolean);
+          
+          alert(`成功自檔案匯入 ${customKeywords.length} 個關鍵字！`);
+          event.target.value = ''; // 重設以便可重複上傳
+        } catch (err) {
+          console.error("檔案解析失敗:", err);
+          alert(`檔案解析失敗: ${err.message}`);
+        }
+      };
+      reader.readAsArrayBuffer(file);
     }
 
     function downloadTranscript() {
