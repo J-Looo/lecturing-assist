@@ -200,6 +200,9 @@
 
     let lastText = '';
     async function translateAndCorrectWithGemini(inputText, targetLang, apiKey) {
+      // 🔽 請加上這一行，印出真正傳進來的 Key
+  console.log("👉 傳進來的 API Key 是：", apiKey);
+      
       if (inputText === lastText) return;
       lastText = inputText;
 
