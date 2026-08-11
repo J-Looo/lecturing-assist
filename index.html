@@ -32,23 +32,25 @@
 
     main { flex: 1; display: flex; flex-direction: column; gap: 1.2vw; margin-top: 1vw; overflow: hidden; }
 
-    #translate-container { flex: 1.3; display: flex; gap: 1vw; position: relative; }
+    #translate-container { flex: 1; display: flex; flex-direction: column; gap: 1vw; position: relative; }
 
     .trans-box {
       flex: 1; background: #161b22; border: 1px solid #30363d; border-radius: 12px;
-      padding: 1.8vw; display: flex; flex-direction: column; position: relative;
+      padding: 1.2vw 1.8vw; display: flex; flex-direction: column; position: relative;
       box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      justify-content: space-between;
     }
 
     .box-header {
       display: flex; align-items: center; gap: 8px; font-size: 1.1vw;
-      font-weight: 600; color: #38bdf8; margin-bottom: 1vw;
+      font-weight: 600; color: #38bdf8; margin-bottom: 0.5vw;
       border-bottom: 1px solid #21262d; padding-bottom: 0.5vw;
     }
 
     .box-content {
       font-size: 3.5vw; font-weight: 700; line-height: 1.25;
       word-break: break-word; flex: 1; display: flex; align-items: center;
+      overflow-y: auto;
     }
 
     #speech-text { color: #ffffff; text-shadow: 0 0 15px rgba(255,255,255,0.1); }
@@ -70,16 +72,72 @@
     #qr-toggle-btn { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; border-radius: 3px; cursor: pointer; padding: 1px 5px; font-size: 0.7vw; }
     #qr-body { background: #fff; padding: 4px; border-radius: 4px; }
 
-    #summary-section {
-      flex: 0.7; background: #082f49; border: 1px solid #0284c7;
-      border-radius: 12px; padding: 1.2vw 1.8vw; display: flex;
-      flex-direction: column; justify-content: flex-start; overflow-y: auto;
-    }
-
-    .summary-title { font-size: 1vw; color: #7dd3fc; margin-bottom: 0.4vw; font-weight: 600; }
-    #summary-text { font-size: 1.3vw; font-weight: 500; color: #e0f2fe; line-height: 1.45; white-space: pre-line; }
-
     .highlight { background: #854d0e; color: #fef08a; padding: 0 4px; border-radius: 4px; }
+
+    /* 底部控制列與按鈕樣式 */
+    .box-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 0.5vw;
+      border-top: 1px solid #21262d;
+      padding-top: 0.6vw;
+    }
+    .footer-btn-group {
+      display: flex;
+      align-items: center;
+      gap: 0.6vw;
+    }
+    .icon-btn {
+      background: none;
+      border: none;
+      color: #8b949e;
+      cursor: pointer;
+      width: 2.2vw;
+      height: 2.2vw;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      outline: none;
+    }
+    .icon-btn:hover {
+      background: #21262d;
+      color: #38bdf8;
+    }
+    .icon-btn:active {
+      transform: scale(0.92);
+    }
+    .icon-btn svg {
+      width: 1.2vw;
+      height: 1.2vw;
+    }
+    .font-btn {
+      font-size: 0.8vw;
+      font-weight: 700;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 0.1vw 0.5vw;
+      width: auto;
+      height: auto;
+      color: #c9d1d9;
+    }
+    .font-btn:hover {
+      background: #30363d;
+      color: #fff;
+    }
+    
+    /* 播放發音呼吸動畫 */
+    .icon-btn.speaking {
+      color: #38bdf8;
+      animation: speak-pulse 1.5s infinite;
+    }
+    @keyframes speak-pulse {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.1); opacity: 0.7; color: #7dd3fc; }
+      100% { transform: scale(1); opacity: 1; }
+    }
 
     /* Modal 樣式 */
     .modal-overlay {
@@ -178,7 +236,7 @@
         <div id="qr-body"><div id="qrcode"></div></div>
       </div>
 
-      <div class="swap-icon">⇄</div>
+      <div class="swap-icon">⇅</div>
 
       <div class="trans-box">
         <div class="box-header">
@@ -186,6 +244,21 @@
           <span id="source-lang-label" style="font-size:0.8vw; color:#8b949e; margin-left:auto;">(英文)</span>
         </div>
         <div id="speech-text" class="box-content">等待語音輸入...</div>
+        <div class="box-footer">
+          <div class="footer-btn-group">
+            <button id="tts-source-btn" class="icon-btn" onclick="speakText('speech-text', true)" title="聆聽發音">
+              <svg class="tts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path class="volume-wave" d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                <path class="volume-wave-outer" d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+              </svg>
+            </button>
+          </div>
+          <div class="footer-btn-group">
+            <button class="icon-btn font-btn" onclick="adjustFontSize('speech-text', -0.3)" title="縮小字體">A-</button>
+            <button class="icon-btn font-btn" onclick="adjustFontSize('speech-text', 0.3)" title="放大字體">A+</button>
+          </div>
+        </div>
       </div>
 
       <div class="trans-box" style="background: #111827;">
@@ -194,12 +267,22 @@
           <span id="target-lang-label" style="font-size:0.8vw; color:#8b949e; margin-left:auto;">(繁體中文)</span>
         </div>
         <div id="trans-text" class="box-content">等待翻譯服務串接...</div>
+        <div class="box-footer">
+          <div class="footer-btn-group">
+            <button id="tts-trans-btn" class="icon-btn" onclick="speakText('trans-text', false)" title="聆聽發音">
+              <svg class="tts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path class="volume-wave" d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                <path class="volume-wave-outer" d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+              </svg>
+            </button>
+          </div>
+          <div class="footer-btn-group">
+            <button class="icon-btn font-btn" onclick="adjustFontSize('trans-text', -0.3)" title="縮小字體">A-</button>
+            <button class="icon-btn font-btn" onclick="adjustFontSize('trans-text', 0.3)" title="放大字體">A+</button>
+          </div>
+        </div>
       </div>
-    </section>
-
-    <section id="summary-section">
-      <div class="summary-title">🤖 即時課堂話題摘要</div>
-      <div id="summary-text">等待摘要服務串接...</div>
     </section>
   </main>
 
@@ -265,7 +348,84 @@
 
     const speechBox = document.getElementById('speech-text');
     const transBox = document.getElementById('trans-text');
-    const summaryBox = document.getElementById('summary-text');
+
+    // 初始化與讀取字型大小偏好
+    let speechFontSize = parseFloat(localStorage.getItem('speech_font_size')) || 3.5;
+    let transFontSize = parseFloat(localStorage.getItem('trans_font_size')) || 3.5;
+    speechBox.style.fontSize = speechFontSize + 'vw';
+    transBox.style.fontSize = transFontSize + 'vw';
+
+    // 字型大小調整函數
+    function adjustFontSize(elementId, delta) {
+      const element = document.getElementById(elementId);
+      if (!element) return;
+      
+      let currentSize = 3.5;
+      if (elementId === 'speech-text') {
+        speechFontSize = Math.min(Math.max(speechFontSize + delta, 1.5), 6.5);
+        currentSize = speechFontSize;
+        localStorage.setItem('speech_font_size', speechFontSize);
+      } else if (elementId === 'trans-text') {
+        transFontSize = Math.min(Math.max(transFontSize + delta, 1.5), 6.5);
+        currentSize = transFontSize;
+        localStorage.setItem('trans_font_size', transFontSize);
+      }
+      element.style.fontSize = currentSize + 'vw';
+    }
+
+    // 語音播放 (TTS) 函數
+    let currentSpeechUtterance = null;
+    function speakText(elementId, isSource) {
+      const element = document.getElementById(elementId);
+      if (!element) return;
+      const text = element.innerText;
+      
+      if (!text || text === '等待語音輸入...' || text === '等待翻譯服務串接...') return;
+      
+      const btnId = isSource ? 'tts-source-btn' : 'tts-trans-btn';
+      const btn = document.getElementById(btnId);
+      
+      // 如果正在撥放，點擊則停止
+      if (window.speechSynthesis.speaking && currentSpeechUtterance) {
+        window.speechSynthesis.cancel();
+        if (btn.classList.contains('speaking')) {
+          btn.classList.remove('speaking');
+          return;
+        }
+      }
+      
+      // 清除所有按鈕的 speaking 樣式
+      document.getElementById('tts-source-btn').classList.remove('speaking');
+      document.getElementById('tts-trans-btn').classList.remove('speaking');
+      
+      const utterance = new SpeechSynthesisUtterance(text);
+      currentSpeechUtterance = utterance;
+      
+      // 依語言設定播放語系
+      let lang = 'zh-TW';
+      if (isSource) {
+        const sourceLangName = document.getElementById('source-lang-label').innerText.replace(/[()]/g, '');
+        lang = getLangCode(sourceLangName) || 'zh-TW';
+      } else {
+        const targetLangName = document.getElementById('target-lang-label').innerText.replace(/[()]/g, '');
+        lang = getLangCode(targetLangName) || 'zh-TW';
+      }
+      utterance.lang = lang;
+      
+      utterance.onstart = () => {
+        btn.classList.add('speaking');
+      };
+      
+      utterance.onend = () => {
+        btn.classList.remove('speaking');
+      };
+      
+      utterance.onerror = () => {
+        btn.classList.remove('speaking');
+      };
+      
+      window.speechSynthesis.speak(utterance);
+    }
 
     // --- Groq API & 金鑰管理邏輯 ---
     function openKeyModal() {
@@ -323,21 +483,9 @@
     }
 
     function checkKeyStatus() {
-      const key = getGroqKey();
-      
-      // 翻譯功能目前使用 Google 翻譯網頁版免金鑰 API，不需要金鑰提示
-      if (transBox.innerText === '等待翻譯服務串接...' || transBox.innerText.includes('請點擊右上角')) {
+      // 翻譯與語音功能皆不需要此處對摘要的特別狀態提示
+      if (transBox.innerText === '等待翻譯服務串接...') {
         transBox.innerText = '等待語音輸入...';
-      }
-      
-      if (!key) {
-        if (summaryBox.innerText === '等待摘要服務串接...' || summaryBox.innerText.includes('等待語音輸入')) {
-          summaryBox.innerHTML = '<span style="color:#8b949e; font-size:1.4vw;">請點擊右上角「⚙️ 設定 Groq 金鑰」以啟動話題摘要</span>';
-        }
-      } else {
-        if (summaryBox.innerText === '等待摘要服務串接...' || summaryBox.innerText.includes('請點擊右上角')) {
-          summaryBox.innerText = '等待語音輸入以產生話題摘要...';
-        }
       }
     }
 
@@ -398,71 +546,6 @@
       translateText(text, sourceLang, targetLangName);
     }, 600);
 
-    // 呼叫 Groq Chat Completion API 產生課堂摘要
-    async function generateSummary() {
-      if (fullTranscriptList.length === 0) return;
-
-      const apiKey = getGroqKey();
-      if (!apiKey) {
-        checkKeyStatus();
-        return;
-      }
-
-      // 顯示摘要中動畫
-      summaryBox.innerHTML = '<div class="loading-dots"><span></span><span></span><span></span><span style="font-size: 1vw; margin-left: 8px; color: #7dd3fc;">AI 正在彙整摘要中...</span></div>';
-
-      const transcriptText = fullTranscriptList.join('\n');
-      const systemPrompt = `You are an AI classroom teaching assistant. Based on the following transcript history of the lecture so far, generate a concise, bullet-pointed summary of the main topics discussed. 
-Requirements:
-1. Write in Traditional Chinese (繁體中文).
-2. List 2 to 3 core topics or key points.
-3. Keep each bullet point brief and clear (one sentence per bullet point).
-4. Use standard bullet character "•" for each point.
-5. Do not include any preamble, explanations, introduction, markdown headers, or footnotes. Just return the raw bulleted text list.
-
-Lecture transcript history:
-${transcriptText}`;
-
-      try {
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-          },
-          body: JSON.stringify({
-            model: 'llama3-8b-8192',
-            messages: [
-              { role: 'user', content: systemPrompt }
-            ],
-            temperature: 0.3,
-            max_tokens: 800
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`Groq API 錯誤: ${response.status}`);
-        }
-
-        const data = await response.json();
-        const summary = data.choices?.[0]?.message?.content?.trim();
-
-        if (summary) {
-          summaryBox.innerText = summary;
-        } else {
-          summaryBox.innerText = '摘要結果為空';
-        }
-      } catch (err) {
-        console.error('Summary generation failed:', err);
-        summaryBox.innerHTML = `<span style="color:#ef4444; font-size:1.2vw;">無法產生摘要: ${err.message}</span>`;
-      }
-    }
-
-    // 建立防抖動版本的摘要生成函數 (暫停說話 3 秒後觸發)
-    const debouncedGenerateSummary = debounce(() => {
-      generateSummary();
-    }, 3000);
-
     // --- Firebase 資料監聽與原有功能 ---
 
     // 監聽 Firebase 實時語音輸入
@@ -497,9 +580,6 @@ ${transcriptText}`;
 
       fullTranscriptList.push(data.text);
       updateStats(data.text);
-
-      // 觸發 AI 話題摘要功能（使用 Groq Llama-3 進行彙整）
-      debouncedGenerateSummary();
     });
 
     let totalWordCount = 0;
