@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>課堂即時字幕與 AI 視覺牆</title>
   
-  <script src="config.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -129,6 +128,9 @@
   </main>
 
   <script>
+    // 請在此處填入你的 Gemini API Key
+    const GEMINI_API_KEY = "你的_GEMINI_API_KEY";
+
     const firebaseConfig = {
       databaseURL: "https://test-speaker-cb3f5-default-rtdb.asia-southeast1.firebasedatabase.app"
     };
@@ -172,11 +174,6 @@
     const speechBox = document.getElementById('speech-text');
     const transBox = document.getElementById('trans-text');
 
-    function getCleanApiKey() {
-      if (typeof GEMINI_API_KEY === 'undefined' || !GEMINI_API_KEY) return null;
-      return GEMINI_API_KEY.trim();
-    }
-
     let translateDebounceTimer = null;
 
     db.ref(`rooms/${roomId}/speech_live`).on('value', async (snapshot) => {
@@ -188,10 +185,10 @@
       if (data.sourceLang) document.getElementById('source-lang-label').innerText = `(${data.sourceLang})`;
       if (data.targetLangName) document.getElementById('target-lang-label').innerText = `(${data.targetLangName})`;
 
-      const apiKey = getCleanApiKey();
-      if (!apiKey || apiKey.includes("YOUR_")) {
+      const apiKey = GEMINI_API_KEY ? GEMINI_API_KEY.trim() : '';
+      if (!apiKey || apiKey.includes("你的_")) {
         transBox.style.color = '#ef4444';
-        transBox.innerText = '❌ 請在 config.js 填入有效的 GEMINI_API_KEY';
+        transBox.innerText = '❌ 請在 index.html 中填入有效的 GEMINI_API_KEY';
         return;
       }
 
@@ -214,7 +211,6 @@
 語音輸入文字："${inputText}"`;
 
       try {
-        // 模型切換回 gemini-1.5-flash
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
         const response = await fetch(url, {
           method: 'POST',
@@ -255,12 +251,12 @@
     });
 
     async function generateAISummary() {
-      const apiKey = getCleanApiKey();
-      if (!apiKey) return;
+      const apiKey = GEMINI_API_KEY ? GEMINI_API_KEY.trim() : '';
+      if (!apiKey || apiKey.includes("你的_")) return;
+      
       const recentContext = fullTranscriptList.slice(-10).join('\n');
       
       try {
-        // 模型切換回 gemini-1.5-flash
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
         const response = await fetch(url, {
           method: 'POST',
