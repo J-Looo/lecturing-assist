@@ -15,7 +15,6 @@
       display: flex; flex-direction: column; align-items: center;
     }
     
-    /* Google 翻譯頂部語言切換列 */
     .trans-header {
       width: 100%; max-width: 400px; background: #161b22; border: 1px solid #30363d;
       border-radius: 12px; padding: 10px 15px; display: flex; align-items: center;
@@ -31,7 +30,6 @@
       display: flex; align-items: center; justify-content: center; cursor: pointer;
     }
 
-    /* 麥克風與語音即時顯示面板 */
     .mic-panel {
       width: 100%; max-width: 400px; background: #161b22; border: 1px solid #30363d;
       border-radius: 12px; padding: 20px; display: flex; flex-direction: column; align-items: center;
@@ -49,43 +47,28 @@
       width: 100%; min-height: 80px; background: #0d1117; border: 1px solid #21262d;
       border-radius: 8px; padding: 10px; font-size: 1rem; color: #e3e8f0; word-break: break-word;
     }
-
-    /* 翻譯開關列 */
-    .toggle-row {
-      width: 100%; max-width: 400px; display: flex; justify-content: space-between;
-      align-items: center; background: #161b22; border: 1px solid #30363d;
-      border-radius: 8px; padding: 12px 15px; font-size: 0.95rem;
-    }
   </style>
 </head>
 <body>
 
   <h3 style="margin-bottom: 15px;">🎤 講者控制台 (房間: <span id="room-id">----</span>)</h3>
 
-  <!-- 1. Google 翻譯風格左右對調選單 -->
   <div class="trans-header">
     <select id="sourceLangSelect">
-      <option value="cmn-Hant-TW" data-name="中文 / 中英夾雜">中文 / 中英夾雜</option>
       <option value="en-US" data-name="英文">英文</option>
+      <option value="cmn-Hant-TW" data-name="中文 / 中英夾雜">中文 / 中英夾雜</option>
       <option value="ja-JP" data-name="日文">日文</option>
     </select>
 
     <button class="swap-btn" onclick="swapLanguages()">⇄</button>
 
     <select id="targetLangSelect">
-      <option value="en" data-name="英文">英文</option>
       <option value="zh-TW" data-name="繁體中文">繁體中文</option>
+      <option value="en" data-name="英文">英文</option>
       <option value="ja" data-name="日文">日文</option>
     </select>
   </div>
 
-  <!-- 2. 翻譯開關 -->
-  <div class="toggle-row" style="margin-bottom: 15px;">
-    <span>啟用 Gemini 即時對照翻譯</span>
-    <input type="checkbox" id="translateToggle" checked style="width:20px; height:20px;">
-  </div>
-
-  <!-- 3. 大顆 Google 麥克風按鈕區 -->
   <div class="mic-panel">
     <button id="micBtn">🎤</button>
     <div id="statusText" style="font-size:0.85rem; color:#8b949e;">點擊麥克風開始收音</div>
@@ -103,19 +86,17 @@
     const roomId = urlParams.get('room') || 'default';
     document.getElementById('room-id').innerText = roomId;
 
-    // 對調語言選單邏輯
     function swapLanguages() {
       const srcSelect = document.getElementById('sourceLangSelect');
       const tgtSelect = document.getElementById('targetLangSelect');
-      const tempVal = srcSelect.selectedIndex;
+      const tempVal = srcSelect.value;
       
-      // 簡易切換範例 (中文 <-> 英文)
-      if (srcSelect.value === 'cmn-Hant-TW') {
-        srcSelect.value = 'en-US';
-        tgtSelect.value = 'zh-TW';
-      } else {
+      if (tempVal === 'en-US') {
         srcSelect.value = 'cmn-Hant-TW';
         tgtSelect.value = 'en';
+      } else {
+        srcSelect.value = 'en-US';
+        tgtSelect.value = 'zh-TW';
       }
     }
 
@@ -127,16 +108,18 @@
       recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
 
       recognition.onstart = () => {
         isListening = true;
-        document.getElementById('statusText').innerText = "🎤 收音中，請說話...";
+        document.getElementById('statusText').innerText = "🎤 強效收音中，請說話...";
         document.getElementById('micBtn').classList.add('speaking');
       };
 
       recognition.onend = () => {
-        if (isListening) recognition.start();
-        else {
+        if (isListening) {
+          try { recognition.start(); } catch(e){}
+        } else {
           document.getElementById('statusText').innerText = "已停止收音";
           document.getElementById('micBtn').classList.remove('speaking');
         }
@@ -159,10 +142,10 @@
         const srcOpt = document.getElementById('sourceLangSelect').selectedOptions[0];
         const tgtOpt = document.getElementById('targetLangSelect').selectedOptions[0];
 
-        // 將文字與語言方向推送到 Firebase
+        // 強制發送至 Firebase
         db.ref(`rooms/${roomId}/speech_live`).set({
           text: currentText,
-          needTranslate: document.getElementById('translateToggle').checked,
+          needTranslate: true,
           sourceLang: srcOpt.getAttribute('data-name'),
           targetLangName: tgtOpt.getAttribute('data-name'),
           timestamp: Date.now()
