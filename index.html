@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>演講現場大螢幕字幕牆</title>
-  <!-- 引入 QR Code 生成套件與 Firebase SDK -->
+  <title>演講/課堂即時字幕與 AI 助手牆</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -14,162 +13,312 @@
     body {
       background-color: #08090a;
       color: #f0f6fc;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang TC", "Microsoft JhengHei", sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
       height: 100vh;
       display: flex;
       flex-direction: column;
-      justify-content: flex-end;
-      padding: 4vw;
+      justify-content: space-between;
+      padding: 2vw;
       overflow: hidden;
+    }
+
+    /* 頂部控制面板與儀表板 */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(22, 27, 34, 0.8);
+      border: 1px solid #30363d;
+      padding: 1vw 1.5vw;
+      border-radius: 12px;
+      z-index: 100;
+    }
+    .stats-group { display: flex; gap: 1.5vw; font-size: 1.1vw; color: #8b949e; }
+    .stats-val { color: #58a6ff; font-weight: bold; }
+    
+    .toolbar { display: flex; gap: 0.8vw; align-items: center; }
+    .btn {
+      background: #21262d; border: 1px solid #30363d; color: #c9d1d9;
+      padding: 0.4vw 0.8vw; border-radius: 6px; cursor: pointer; font-size: 0.9vw;
+    }
+    .btn:hover { background: #30363d; color: #fff; }
+
+    /* 主畫面配置：左為字幕牆，右為 AI 摘要與 QR Code */
+    main {
+      display: flex;
+      gap: 2vw;
+      flex: 1;
+      margin-top: 1.5vw;
+      overflow: hidden;
+    }
+    #subtitle-section {
+      flex: 3;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
       position: relative;
     }
 
-    /* 右上角 QR Code 與控制卡片 */
-    #qr-card {
-      position: absolute;
-      top: 2vw;
-      right: 2vw;
-      background: rgba(22, 27, 34, 0.85);
+    #sidebar {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 1vw;
+    }
+
+    /* AI 摘要卡片 */
+    .card {
+      background: #161b22;
       border: 1px solid #30363d;
-      backdrop-filter: blur(10px);
-      padding: 1vw;
       border-radius: 12px;
+      padding: 1vw;
+    }
+    .card h3 { font-size: 1vw; color: #8b949e; margin-bottom: 0.5vw; display: flex; justify-content: space-between; }
+    #ai-summary { font-size: 0.95vw; color: #d2a8ff; line-height: 1.5; white-space: pre-line; max-height: 25vh; overflow-y: auto; }
+
+    /* QR Code 卡片 */
+    #qr-card {
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 0.5vw;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-      z-index: 100;
     }
-    #qrcode {
-      background: #fff;
-      padding: 8px;
-      border-radius: 6px;
-    }
-    #qrcode img { display: block; }
-    .room-info {
-      font-size: 1.2vw;
-      color: #8b949e;
-      font-weight: 600;
-    }
-    .room-code {
-      color: #58a6ff;
-    }
+    #qrcode img { border-radius: 6px; background: #fff; padding: 6px; }
 
-    /* 歷史句子（較小、半透明，自動向上推） */
+    /* 字幕樣式調整 (可手動按鈕調整大小) */
+    :root { --subtitle-font-size: 4.5vw; }
     #history-container {
-      display: flex;
-      flex-direction: column;
-      gap: 1.2rem;
-      margin-bottom: 2rem;
-      max-height: 35vh;
-      overflow: hidden;
-      opacity: 0.5;
+      display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem;
+      max-height: 30vh; overflow: hidden; opacity: 0.55;
     }
-    .history-item {
-      font-size: 2.8vw;
-      line-height: 1.4;
-      color: #c9d1d9;
-      animation: fadeInUp 0.3s ease-out;
-    }
-
-    /* 當前正在講的句子（超大字體、高亮亮藍色） */
+    .history-item { font-size: calc(var(--subtitle-font-size) * 0.5); color: #c9d1d9; }
+    
     #current-sentence {
-      font-size: 5.5vw;
-      font-weight: 800;
-      line-height: 1.3;
-      color: #38bdf8;
-      text-shadow: 0 0 35px rgba(56, 189, 248, 0.35);
-      min-height: 2.6em;
-      word-break: break-word;
-      transition: color 0.2s ease;
+      font-size: var(--subtitle-font-size);
+      font-weight: 800; line-height: 1.3; color: #38bdf8;
+      text-shadow: 0 0 30px rgba(56, 189, 248, 0.3);
+      word-break: break-word; min-height: 2.2em;
     }
-    .interim {
-      color: #93c5fd;
-      font-style: italic;
+    #translated-sentence {
+      font-size: calc(var(--subtitle-font-size) * 0.6);
+      color: #34d399; font-weight: 600; margin-top: 0.5rem;
     }
 
-    @keyframes fadeInUp {
-      from { opacity: 0; transform: translateY(15px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
+    /* 高亮關鍵字樣式 */
+    .highlight { background: #854d0e; color: #fef08a; padding: 0 4px; border-radius: 4px; }
   </style>
 </head>
 <body>
 
-  <!-- 右上角 QR Code 控制區 -->
-  <div id="qr-card">
-    <div id="qrcode"></div>
-    <div class="room-info">手機掃碼開啟控制台</div>
-    <div class="room-info">房間頻道：<span id="room-display" class="room-code">----</span></div>
-  </div>
+  <!-- 頂部功能工具列 -->
+  <header>
+    <div class="stats-group">
+      <div>總字數：<span id="stat-words" class="stats-val">0</span> 字</div>
+      <div>即時語速：<span id="stat-wpm" class="stats-val">0</span> 字/分</div>
+      <div>房間頻道：<span id="room-display" class="stats-val">----</span></div>
+    </div>
+    <div class="toolbar">
+      <button class="btn" onclick="adjustFontSize(1)">A+</button>
+      <button class="btn" onclick="adjustFontSize(-1)">A-</button>
+      <button class="btn" onclick="toggleHistory()">隱藏/顯示歷史字幕</button>
+      <button class="btn" onclick="importSheetsKeywords()">連結 Google 試算表關鍵字</button>
+      <button class="btn" style="background:#238636; color:#fff;" onclick="downloadTranscript()">下載全場逐字稿</button>
+    </div>
+  </header>
 
-  <!-- 主畫面字幕區 -->
-  <div id="history-container"></div>
-  <div id="current-sentence" class="interim">等待講者連線開口...</div>
+  <!-- 主內容區 -->
+  <main>
+    <!-- 左側大字體字幕區域 -->
+    <section id="subtitle-section">
+      <div id="history-container"></div>
+      <div id="current-sentence">等待語音連線中...</div>
+      <div id="translated-sentence"></div>
+    </section>
+
+    <!-- 右側資訊欄（AI 即時摘要與 QR Code） -->
+    <aside id="sidebar">
+      <div class="card" id="qr-card">
+        <div id="qrcode"></div>
+        <div style="font-size:0.8vw; color:#8b949e;">手機掃碼連線控制</div>
+      </div>
+
+      <div class="card" style="flex:1;">
+        <h3>🤖 AI 即時話題摘要 <span id="ai-status" style="font-size:0.7vw; color:#34d399;">● 運作中</span></h3>
+        <div id="ai-summary">語音輸入持續累積中，將自動產出重點摘要...</div>
+      </div>
+    </aside>
+  </main>
 
   <script>
-    // 1. 初始化 Firebase (已填入你的 Realtime Database 網址)
+    // 1. 初始化 Firebase (填入你的 databaseURL)
     const firebaseConfig = {
       databaseURL: "https://test-speaker-cb3f5-default-rtdb.asia-southeast1.firebasedatabase.app"
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // 2. 解析或自動生成房間號碼 (?room=1234)
+    // 2. 關鍵字清單與 Gemini API 密碼設定
+    let customKeywords = [];
+    const GEMINI_API_KEY = "AQ.Ab8RN6KhbdQ3kjTrhtp4dO8heovIkhHwH-3cwgePox_cMKhc-g"; // 欲啟用 Gemini 功能請在此填入 API Key
+
+    // 3. 解析房間號碼與生成 QR Code
     const urlParams = new URLSearchParams(window.location.search);
-    let roomId = urlParams.get('room');
-    if (!roomId) {
-      roomId = Math.floor(1000 + Math.random() * 9000).toString(); // 隨機 4 位數
-      const newUrl = `${window.location.pathname}?room=${roomId}`;
-      window.history.replaceState(null, '', newUrl);
-    }
+    let roomId = urlParams.get('room') || Math.floor(1000 + Math.random() * 9000).toString();
     document.getElementById('room-display').innerText = roomId;
 
-    // 3. 自動動態拼接同目錄下的 speaker.html 網址並生成 QR Code
     const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
-    const speakerUrl = `${baseUrl}/speaker.html?room=${roomId}`;
-
     new QRCode(document.getElementById("qrcode"), {
-      text: speakerUrl,
-      width: 140,
-      height: 140,
-      colorDark : "#000000",
-      colorLight : "#ffffff",
-      correctLevel : QRCode.CorrectLevel.H
+      text: `${baseUrl}/speaker.html?room=${roomId}`,
+      width: 120, height: 120
     });
 
-    // 4. 監聽 Firebase 即時語音文字
+    // 4. 字數與語速 (WPM) 計算邏輯
+    let totalWordCount = 0;
+    let startTime = Date.now();
+    
+    function updateStats(text) {
+      if(!text) return;
+      const words = text.trim().length;
+      totalWordCount += words;
+      const minutes = (Date.now() - startTime) / 60000;
+      const wpm = minutes > 0 ? Math.round(totalWordCount / minutes) : 0;
+      
+      document.getElementById('stat-words').innerText = totalWordCount;
+      document.getElementById('stat-wpm').innerText = wpm;
+    }
+
+    // 5. 關鍵字手動高亮標示邏輯
+    function applyHighlights(text) {
+      if(!text) return '';
+      let result = text;
+      customKeywords.forEach(kw => {
+        if(kw.trim()){
+          const reg = new RegExp(kw.trim(), 'gi');
+          result = result.replace(reg, match => `<span class="highlight">${match}</span>`);
+        }
+      });
+      return result;
+    }
+
+    // 6. 監聽 Firebase 傳來的即時語音與翻譯
     const currentBox = document.getElementById('current-sentence');
+    const transBox = document.getElementById('translated-sentence');
     const historyContainer = document.getElementById('history-container');
 
-    // 監聽即時講話內容
     db.ref(`rooms/${roomId}/speech_live`).on('value', (snapshot) => {
       const data = snapshot.val();
       if (!data || !data.text) return;
 
-      currentBox.innerText = data.text;
-      if (data.isFinal) {
-        currentBox.classList.remove('interim');
+      // 檢查是否觸發 "Hey Gemini" 喚醒詞 (需求 9)
+      if (data.text.toLowerCase().includes("hey gemini")) {
+        triggerGeminiLive(data.text);
+      }
+
+      currentBox.innerHTML = applyHighlights(data.text);
+      if (data.translatedText) {
+        transBox.innerText = data.translatedText;
       } else {
-        currentBox.classList.add('interim');
+        transBox.innerText = '';
       }
     });
 
-    // 監聽歷史句子歸檔 (最多保留 3 句推移顯示)
-    db.ref(`rooms/${roomId}/speech_history`).limitToLast(3).on('child_added', (snapshot) => {
+    // 歷史紀錄寫入
+    let fullTranscriptList = [];
+    db.ref(`rooms/${roomId}/speech_history`).on('child_added', (snapshot) => {
       const data = snapshot.val();
       if (!data || !data.text) return;
 
+      fullTranscriptList.push(data.text);
+      updateStats(data.text);
+
       const item = document.createElement('div');
       item.className = 'history-item';
-      item.innerText = data.text;
-      
+      item.innerHTML = applyHighlights(data.text);
       historyContainer.appendChild(item);
+
       if (historyContainer.children.length > 3) {
         historyContainer.removeChild(historyContainer.firstChild);
       }
+
+      // 每累積滿 5 句話自動觸發 AI 即時摘要 (需求 4)
+      if (fullTranscriptList.length % 5 === 0) {
+        generateAISummary();
+      }
     });
+
+    // 7. 工具列功能函數：A+/A- 字體調整 (需求 7)
+    let currentFontSize = 4.5;
+    function adjustFontSize(delta) {
+      currentFontSize = Math.max(2, Math.min(8, currentFontSize + delta * 0.5));
+      document.documentElement.style.setProperty('--subtitle-font-size', `${currentFontSize}vw`);
+    }
+
+    // 隱藏/顯示歷史字幕 (需求 8)
+    function toggleHistory() {
+      historyContainer.style.display = historyContainer.style.display === 'none' ? 'flex' : 'none';
+    }
+
+    // 連接 Google 試算表關鍵字 (需求 2)
+    function importSheetsKeywords() {
+      const url = prompt("請貼上 Google 試算表已發布的 CSV 網址：");
+      if (url) {
+        fetch(url).then(res => res.text()).then(data => {
+          customKeywords = data.split(/\r?\n/).flatMap(row => row.split(','));
+          alert(`成功匯入 ${customKeywords.length} 個關鍵字！`);
+        }).catch(() => alert("擷取 Google 試算表失敗，請確認網址格式。"));
+      }
+    }
+
+    // 一鍵下載全場逐字稿 (需求 1)
+    function downloadTranscript() {
+      if (fullTranscriptList.length === 0) return alert("目前尚無講話紀錄！");
+      const text = `--- 演講逐字稿 (房間號碼：${roomId}) ---\n\n` + fullTranscriptList.join('\n');
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `演講逐字稿_${roomId}.txt`;
+      a.click();
+    }
+
+    // 8. Gemini API 整合：即時摘要與 Hey Gemini Live 對話 (需求 4, 9)
+    async function generateAISummary() {
+      if (!GEMINI_API_KEY || GEMINI_API_KEY === "YOUR_GEMINI_API_KEY") return;
+      const recentContext = fullTranscriptList.slice(-15).join(' ');
+      
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: `請將以下課堂逐字稿整理為 3 個條列式重點摘要：\n${recentContext}` }] }]
+          })
+        });
+        const resData = await response.json();
+        const summaryText = resData.candidates[0].content.parts[0].text;
+        document.getElementById('ai-summary').innerText = summaryText;
+      } catch (e) {
+        console.error("AI 摘要產生失敗", e);
+      }
+    }
+
+    async function triggerGeminiLive(promptText) {
+      if (!GEMINI_API_KEY || GEMINI_API_KEY === "YOUR_GEMINI_API_KEY") return;
+      const query = promptText.toLowerCase().split("hey gemini")[1];
+      if (!query || query.trim().length < 2) return;
+
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: `使用者在演講中對你提問："${query}"，請用簡短兩句話回答：` }] }]
+          })
+        });
+        const resData = await response.json();
+        const aiReply = resData.candidates[0].content.parts[0].text;
+        alert(`🤖 Gemini 回應：\n${aiReply}`);
+      } catch (e) { console.error("Gemini 呼叫失敗", e); }
+    }
   </script>
 </body>
 </html>
