@@ -150,20 +150,11 @@
 
         log("辨識文字: " + currentText);
 
-        let translatedText = '';
-        if (translateToggle.checked) {
-          const target = document.getElementById('targetLangSelect').value;
-          try {
-            const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(currentText)}&langpair=autodetect|${target}`);
-            const resData = await res.json();
-            translatedText = resData.responseData.translatedText;
-          } catch(e) { log("翻譯失敗: " + e.message); }
-        }
-
-        // 送出至 Firebase
+        // 核心修改處：將翻譯開關與目標語言一併送到 Firebase，讓電視端 (index.html) 呼叫 Gemini 進行高品質翻譯
         db.ref(`rooms/${roomId}/speech_live`).set({
           text: currentText,
-          translatedText: translatedText,
+          needTranslate: translateToggle.checked,
+          targetLang: document.getElementById('targetLangSelect').value,
           timestamp: Date.now()
         }).then(() => {
           log("已成功發送至雲端！");
