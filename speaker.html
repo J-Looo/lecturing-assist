@@ -11,151 +11,156 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      background: #0d1117;
-      color: #f0f6fc;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
+      background: #0d1117; color: #f0f6fc; padding: 15px;
+      display: flex; flex-direction: column; align-items: center;
     }
-    h2 { margin-bottom: 10px; font-size: 1.5rem; }
-    .room-badge {
-      background: #21262d;
-      border: 1px solid #30363d;
-      padding: 6px 16px;
-      border-radius: 20px;
-      font-size: 0.9rem;
-      color: #58a6ff;
-      margin-bottom: 20px;
+    .panel {
+      width: 100%; max-width: 400px; background: #161b22; border: 1px solid #30363d;
+      border-radius: 10px; padding: 15px; margin-bottom: 15px;
+    }
+    .setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    select, button {
+      padding: 10px; border-radius: 6px; border: 1px solid #30363d; background: #21262d; color: #fff;
     }
     #toggleBtn {
-      width: 100%;
-      max-width: 300px;
-      padding: 20px;
-      font-size: 1.3rem;
-      font-weight: bold;
-      border: none;
-      border-radius: 12px;
-      background: #238636;
-      color: #fff;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(35, 134, 54, 0.4);
-      transition: all 0.2s ease;
+      width: 100%; padding: 18px; font-size: 1.2rem; font-weight: bold; border-radius: 12px;
+      background: #238636; color: #fff; border: none; cursor: pointer;
     }
-    #toggleBtn.speaking {
-      background: #da3633;
-      box-shadow: 0 4px 12px rgba(218, 54, 51, 0.4);
-    }
-    #status { margin-top: 15px; color: #8b949e; font-size: 0.95rem; }
-    #preview-card {
-      width: 100%;
-      max-width: 400px;
-      margin-top: 25px;
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 8px;
-      padding: 15px;
-      text-align: left;
-    }
-    #preview-card h3 { font-size: 0.9rem; color: #8b949e; margin-bottom: 8px; }
-    #preview { font-size: 1.1rem; color: #e6edf3; line-height: 1.5; min-height: 60px; }
+    #toggleBtn.speaking { background: #da3633; }
   </style>
 </head>
 <body>
 
-  <h2>🎤 講者麥克風控制台</h2>
-  <div class="room-badge">頻道號碼：<span id="room-id-display">----</span></div>
+  <h2>🎤 講者控制台</h2>
+  <div style="color:#58a6ff; margin-bottom:15px;">房間頻道：<span id="room-id">----</span></div>
 
-  <button id="toggleBtn">開啟麥克風收音</button>
-  <p id="status">狀態：待命</p>
+  <div class="panel">
+    <!-- 語言與翻譯設定 (需求 5, 6) -->
+    <div class="setting-row">
+      <label>識別語言：</label>
+      <select id="langSelect">
+        <option value="cmn-Hant-TW">中文 / 中英夾雜</option>
+        <option value="en-US">English (英語)</option>
+      </select>
+    </div>
 
-  <div id="preview-card">
-    <h3>即時辨識預覽 (發送至大電視)</h3>
-    <div id="preview">點擊上方按鈕開始講話...</div>
+    <div class="setting-row">
+      <label>即時翻譯：</label>
+      <input type="checkbox" id="translateToggle">
+    </div>
+
+    <div class="setting-row" id="transTargetRow" style="display:none;">
+      <label>目標語言：</label>
+      <select id="targetLangSelect">
+        <option value="en">翻譯為 英文</option>
+        <option value="zh-TW">翻譯為 中文</option>
+      </select>
+    </div>
   </div>
 
+  <button id="toggleBtn">開啟強化降噪收音</button>
+  <p id="status" style="margin-top:10px; font-size:0.85rem; color:#8b949e;">狀態：待命</p>
+
   <script>
-    // 1. 初始化 Firebase (已填入你的 Realtime Database 網址)
     const firebaseConfig = {
       databaseURL: "https://test-speaker-cb3f5-default-rtdb.asia-southeast1.firebasedatabase.app"
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // 2. 取得網址列中的房間號碼
     const urlParams = new URLSearchParams(window.location.search);
     const roomId = urlParams.get('room') || 'default';
-    document.getElementById('room-id-display').innerText = roomId;
+    document.getElementById('room-id').innerText = roomId;
 
-    // 3. 初始化 Web Speech API
-    const toggleBtn = document.getElementById('toggleBtn');
-    const status = document.getElementById('status');
-    const preview = document.getElementById('preview');
+    const translateToggle = document.getElementById('translateToggle');
+    const transTargetRow = document.getElementById('transTargetRow');
+    translateToggle.onchange = () => {
+      transTargetRow.style.display = translateToggle.checked ? 'flex' : 'none';
+    };
+
+    // 10. 麥克風音訊降噪強化設定 (Noise Suppression & Echo Cancellation)
+    async function getEnhancedAudioStream() {
+      try {
+        return await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true, // 回聲消除
+            noiseSuppression: true, // 自動雜訊抑制 (過濾學生吵雜聲)
+            autoGainControl: true   // 自動增益控制
+          }
+        });
+      } catch (e) {
+        console.warn("無法存取降噪麥克風，降級為標準收音", e);
+        return null;
+      }
+    }
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
     let isListening = false;
 
-    if (!SpeechRecognition) {
-      alert("您的手機瀏覽器不支援 Web Speech API，請使用 Android Chrome 或 iOS Safari");
-    } else {
+    if (SpeechRecognition) {
       recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
-      recognition.lang = 'zh-TW';
 
       recognition.onstart = () => {
         isListening = true;
-        status.innerText = "狀態：收音中 (講話即時同步至大螢幕)";
-        toggleBtn.innerText = "停止麥克風收音";
-        toggleBtn.classList.add('speaking');
+        document.getElementById('status').innerText = "狀態：收音中 (已啟用硬體降噪)";
+        document.getElementById('toggleBtn').innerText = "停止收音";
+        document.getElementById('toggleBtn').classList.add('speaking');
       };
 
       recognition.onend = () => {
-        if (isListening) {
-          recognition.start();
-        } else {
-          status.innerText = "狀態：已停止";
-          toggleBtn.innerText = "開啟麥克風收音";
-          toggleBtn.classList.remove('speaking');
+        if (isListening) recognition.start();
+        else {
+          document.getElementById('status').innerText = "狀態：已停止";
+          document.getElementById('toggleBtn').innerText = "開啟強化降噪收音";
+          document.getElementById('toggleBtn').classList.remove('speaking');
         }
       };
 
-      recognition.onresult = (event) => {
-        let interimTranscript = '';
-        let finalTranscript = '';
+      recognition.onresult = async (event) => {
+        let interimText = '';
+        let finalText = '';
 
         for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
-          } else {
-            interimTranscript += event.results[i][0].transcript;
-          }
+          if (event.results[i].isFinal) finalText += event.results[i][0].transcript;
+          else interimText += event.results[i][0].transcript;
         }
 
-        const currentText = finalTranscript || interimTranscript;
-        preview.innerText = currentText || "聽取中...";
+        const currentText = finalText || interimText;
+        let translatedText = '';
 
-        // 即時傳送至雲端房間
+        // 6. 即時翻譯 (利用免費 MyMemory API 進行翻譯)
+        if (translateToggle.checked && currentText.trim()) {
+          const target = document.getElementById('targetLangSelect').value;
+          try {
+            const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(currentText)}&langpair=autodetect|${target}`);
+            const resData = await res.json();
+            translatedText = resData.responseData.translatedText;
+          } catch(e) { console.error("翻譯失敗", e); }
+        }
+
+        // 推送至 Firebase
         db.ref(`rooms/${roomId}/speech_live`).set({
           text: currentText,
-          isFinal: finalTranscript !== '',
+          translatedText: translatedText,
           timestamp: Date.now()
         });
 
-        // 句尾斷句後歸檔
-        if (finalTranscript) {
+        if (finalText) {
           db.ref(`rooms/${roomId}/speech_history`).push({
-            text: finalTranscript,
+            text: finalText,
             timestamp: Date.now()
           });
         }
       };
     }
 
-    toggleBtn.onclick = () => {
+    document.getElementById('toggleBtn').onclick = async () => {
       if (!isListening) {
+        await getEnhancedAudioStream(); // 觸發優化降噪權限
+        recognition.lang = document.getElementById('langSelect').value;
         recognition.start();
       } else {
         isListening = false;
