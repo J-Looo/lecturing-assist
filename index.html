@@ -605,7 +605,7 @@
     async function askGroqAI(question, apiKey) {
       const url = "https://api.groq.com/openai/v1/chat/completions";
       const payload = {
-        model: "llama-3.3-70b-specdec",
+        model: "llama-3.3-70b-versatile",
         messages: [
           {
             role: "system",
@@ -631,7 +631,7 @@
 
       if (!response.ok) {
         if (response.status === 404 || response.status === 400) {
-          payload.model = "llama3-70b-8192";
+          payload.model = "llama-3.1-8b-instant";
           const retryResponse = await fetch(url, {
             method: "POST",
             headers: {
