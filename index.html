@@ -435,6 +435,18 @@
   </div>
 
   <script>
+    // 強制掛載至全域 window 物件，防止 Scope 區域變數與名稱大小寫錯位問題
+window.speakQnAReply = function(text) {
+  if (!('speechSynthesis' in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'zh-TW';
+    window.speechSynthesis.speak(utterance);
+  } catch (e) {
+    console.error("語音發音朗讀失敗:", e);
+  }
+};
     // --- 題目切換與初始化邏輯 ---
     function toggleTheme() {
       const body = document.body;
