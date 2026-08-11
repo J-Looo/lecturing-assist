@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>講者麥克風控制台</title>
+  <title>講者控制台</title>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
@@ -14,129 +14,135 @@
       background: #0d1117; color: #f0f6fc; padding: 15px;
       display: flex; flex-direction: column; align-items: center;
     }
-    .panel {
-      width: 100%; max-width: 400px; background: #161b22; border: 1px solid #30363d;
-      border-radius: 10px; padding: 15px; margin-bottom: 15px;
-    }
-    .setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-    select {
-      padding: 8px; border-radius: 6px; border: 1px solid #30363d; background: #21262d; color: #fff;
-    }
-    #toggleBtn {
-      width: 100%; padding: 18px; font-size: 1.2rem; font-weight: bold; border-radius: 12px;
-      background: #238636; color: #fff; border: none; cursor: pointer; margin-bottom: 15px;
-    }
-    #toggleBtn.speaking { background: #da3633; }
     
-    /* 手機端即時除錯視窗 */
-    #debug-log {
-      width: 100%; max-width: 400px; height: 120px; background: #000; color: #38bdf8;
-      border: 1px solid #30363d; border-radius: 8px; padding: 10px; font-family: monospace;
-      font-size: 0.75rem; overflow-y: auto; white-space: pre-wrap;
+    /* Google 翻譯頂部語言切換列 */
+    .trans-header {
+      width: 100%; max-width: 400px; background: #161b22; border: 1px solid #30363d;
+      border-radius: 12px; padding: 10px 15px; display: flex; align-items: center;
+      justify-content: space-between; margin-bottom: 15px;
+    }
+    select {
+      background: transparent; color: #38bdf8; border: none; font-size: 1rem;
+      font-weight: bold; outline: none; cursor: pointer;
+    }
+    .swap-btn {
+      background: #21262d; border: 1px solid #30363d; color: #8b949e;
+      width: 36px; height: 36px; border-radius: 50%; font-size: 1.2rem;
+      display: flex; align-items: center; justify-content: center; cursor: pointer;
+    }
+
+    /* 麥克風與語音即時顯示面板 */
+    .mic-panel {
+      width: 100%; max-width: 400px; background: #161b22; border: 1px solid #30363d;
+      border-radius: 12px; padding: 20px; display: flex; flex-direction: column; align-items: center;
+      gap: 15px; margin-bottom: 15px;
+    }
+
+    #micBtn {
+      width: 70px; height: 70px; border-radius: 50%; background: #238636; border: none;
+      color: #fff; font-size: 1.8rem; display: flex; align-items: center; justify-content: center;
+      cursor: pointer; box-shadow: 0 4px 12px rgba(35, 134, 54, 0.4);
+    }
+    #micBtn.speaking { background: #da3633; box-shadow: 0 4px 12px rgba(218, 54, 51, 0.5); }
+
+    .live-preview {
+      width: 100%; min-height: 80px; background: #0d1117; border: 1px solid #21262d;
+      border-radius: 8px; padding: 10px; font-size: 1rem; color: #e3e8f0; word-break: break-word;
+    }
+
+    /* 翻譯開關列 */
+    .toggle-row {
+      width: 100%; max-width: 400px; display: flex; justify-content: space-between;
+      align-items: center; background: #161b22; border: 1px solid #30363d;
+      border-radius: 8px; padding: 12px 15px; font-size: 0.95rem;
     }
   </style>
 </head>
 <body>
 
-  <h2 style="margin-bottom:5px;">🎤 講者控制台</h2>
-  <div style="color:#58a6ff; margin-bottom:15px;">房間頻道：<span id="room-id">----</span></div>
+  <h3 style="margin-bottom: 15px;">🎤 講者控制台 (房間: <span id="room-id">----</span>)</h3>
 
-  <div class="panel">
-    <div class="setting-row">
-      <label>識別語言：</label>
-      <select id="langSelect">
-        <option value="cmn-Hant-TW">中文 / 中英夾雜</option>
-        <option value="en-US">English (英語)</option>
-      </select>
-    </div>
+  <!-- 1. Google 翻譯風格左右對調選單 -->
+  <div class="trans-header">
+    <select id="sourceLangSelect">
+      <option value="cmn-Hant-TW" data-name="中文 / 中英夾雜">中文 / 中英夾雜</option>
+      <option value="en-US" data-name="英文">英文</option>
+      <option value="ja-JP" data-name="日文">日文</option>
+    </select>
 
-    <div class="setting-row">
-      <label>即時翻譯：</label>
-      <input type="checkbox" id="translateToggle">
-    </div>
+    <button class="swap-btn" onclick="swapLanguages()">⇄</button>
 
-    <div class="setting-row" id="transTargetRow" style="display:none;">
-      <label>目標語言：</label>
-      <select id="targetLangSelect">
-        <option value="en">翻譯為 英文</option>
-        <option value="zh-TW">翻譯為 中文</option>
-      </select>
-    </div>
+    <select id="targetLangSelect">
+      <option value="en" data-name="英文">英文</option>
+      <option value="zh-TW" data-name="繁體中文">繁體中文</option>
+      <option value="ja" data-name="日文">日文</option>
+    </select>
   </div>
 
-  <button id="toggleBtn">開啟麥克風收音</button>
+  <!-- 2. 翻譯開關 -->
+  <div class="toggle-row" style="margin-bottom: 15px;">
+    <span>啟用 Gemini 即時對照翻譯</span>
+    <input type="checkbox" id="translateToggle" checked style="width:20px; height:20px;">
+  </div>
 
-  <!-- 除錯訊息面板 -->
-  <div id="debug-log">Log: 頁面已載入，等待操作...</div>
+  <!-- 3. 大顆 Google 麥克風按鈕區 -->
+  <div class="mic-panel">
+    <button id="micBtn">🎤</button>
+    <div id="statusText" style="font-size:0.85rem; color:#8b949e;">點擊麥克風開始收音</div>
+    <div class="live-preview" id="liveText">即時辨識文字將顯示於此...</div>
+  </div>
 
   <script>
-    // 簡單日誌紀錄函數
-    function log(msg) {
-      const logBox = document.getElementById('debug-log');
-      logBox.innerText += `\n[${new Date().toLocaleTimeString()}] ${msg}`;
-      logBox.scrollTop = logBox.scrollHeight;
-    }
-
-    // 1. 初始化 Firebase (請確認這個 URL 是否為你的真實資料庫網址)
     const firebaseConfig = {
       databaseURL: "https://test-speaker-cb3f5-default-rtdb.asia-southeast1.firebasedatabase.app"
     };
-    
-    try {
-      firebase.initializeApp(firebaseConfig);
-      log("Firebase 初始化成功！");
-    } catch(e) {
-      log("Firebase 初始化失敗: " + e.message);
-    }
+    firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // 2. 解析房間號碼
     const urlParams = new URLSearchParams(window.location.search);
     const roomId = urlParams.get('room') || 'default';
     document.getElementById('room-id').innerText = roomId;
-    log("當前房間號碼：" + roomId);
 
-    const translateToggle = document.getElementById('translateToggle');
-    const transTargetRow = document.getElementById('transTargetRow');
-    translateToggle.onchange = () => {
-      transTargetRow.style.display = translateToggle.checked ? 'flex' : 'none';
-    };
+    // 對調語言選單邏輯
+    function swapLanguages() {
+      const srcSelect = document.getElementById('sourceLangSelect');
+      const tgtSelect = document.getElementById('targetLangSelect');
+      const tempVal = srcSelect.selectedIndex;
+      
+      // 簡易切換範例 (中文 <-> 英文)
+      if (srcSelect.value === 'cmn-Hant-TW') {
+        srcSelect.value = 'en-US';
+        tgtSelect.value = 'zh-TW';
+      } else {
+        srcSelect.value = 'cmn-Hant-TW';
+        tgtSelect.value = 'en';
+      }
+    }
 
-    // 3. 語音辨識邏輯 (採用最相容手機端的寫法)
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
     let isListening = false;
 
-    if (!SpeechRecognition) {
-      log("❌ 警告：此手機瀏覽器不支援語音辨識！(請改用 Safari 或 Chrome)");
-    } else {
+    if (SpeechRecognition) {
       recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
 
       recognition.onstart = () => {
         isListening = true;
-        log("🎤 麥克風已啟動，請開始說話...");
-        document.getElementById('toggleBtn').innerText = "停止收音";
-        document.getElementById('toggleBtn').classList.add('speaking');
-      };
-
-      recognition.onerror = (event) => {
-        log("❌ 語音辨識錯誤: " + event.error);
+        document.getElementById('statusText').innerText = "🎤 收音中，請說話...";
+        document.getElementById('micBtn').classList.add('speaking');
       };
 
       recognition.onend = () => {
-        log("麥克風連線斷開...");
-        if (isListening) {
-          log("嘗試自動重新連線...");
-          try { recognition.start(); } catch(e) {}
-        } else {
-          document.getElementById('toggleBtn').innerText = "開啟麥克風收音";
-          document.getElementById('toggleBtn').classList.remove('speaking');
+        if (isListening) recognition.start();
+        else {
+          document.getElementById('statusText').innerText = "已停止收音";
+          document.getElementById('micBtn').classList.remove('speaking');
         }
       };
 
-      recognition.onresult = async (event) => {
+      recognition.onresult = (event) => {
         let interimText = '';
         let finalText = '';
 
@@ -148,18 +154,18 @@
         const currentText = finalText || interimText;
         if (!currentText.trim()) return;
 
-        log("辨識文字: " + currentText);
+        document.getElementById('liveText').innerText = currentText;
 
-        // 核心修改處：將翻譯開關與目標語言一併送到 Firebase，讓電視端 (index.html) 呼叫 Gemini 進行高品質翻譯
+        const srcOpt = document.getElementById('sourceLangSelect').selectedOptions[0];
+        const tgtOpt = document.getElementById('targetLangSelect').selectedOptions[0];
+
+        // 將文字與語言方向推送到 Firebase
         db.ref(`rooms/${roomId}/speech_live`).set({
           text: currentText,
-          needTranslate: translateToggle.checked,
-          targetLang: document.getElementById('targetLangSelect').value,
+          needTranslate: document.getElementById('translateToggle').checked,
+          sourceLang: srcOpt.getAttribute('data-name'),
+          targetLangName: tgtOpt.getAttribute('data-name'),
           timestamp: Date.now()
-        }).then(() => {
-          log("已成功發送至雲端！");
-        }).catch(err => {
-          log("❌ Firebase 寫入失敗: " + err.message);
         });
 
         if (finalText) {
@@ -171,21 +177,14 @@
       };
     }
 
-    // 按鈕點擊事件
-    document.getElementById('toggleBtn').onclick = () => {
-      if (!recognition) return alert("您的瀏覽器不支援語音辨識！");
-      
+    document.getElementById('micBtn').onclick = () => {
+      if (!recognition) return alert("瀏覽器不支援語音辨識！");
       if (!isListening) {
-        recognition.lang = document.getElementById('langSelect').value;
-        try {
-          recognition.start();
-        } catch(e) {
-          log("啟動失敗: " + e.message);
-        }
+        recognition.lang = document.getElementById('sourceLangSelect').value;
+        recognition.start();
       } else {
         isListening = false;
         recognition.stop();
-        log("使用者手動停止收音");
       }
     };
   </script>
