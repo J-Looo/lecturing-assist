@@ -48,13 +48,30 @@
     }
 
     .box-content {
-      font-size: 3.5vw; font-weight: 700; line-height: 1.25;
-      word-break: break-word; flex: 1; display: flex; align-items: center;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
       overflow-y: auto;
     }
 
-    #speech-text { color: #ffffff; text-shadow: 0 0 15px rgba(255,255,255,0.1); }
-    #trans-text { color: #facc15; }
+    #speech-text {
+      color: #ffffff;
+      text-shadow: 0 0 15px rgba(255,255,255,0.1);
+      margin: auto 0;
+      font-size: 3.5vw;
+      font-weight: 700;
+      line-height: 1.25;
+      word-break: break-word;
+    }
+    
+    #trans-text {
+      color: #facc15;
+      margin: auto 0;
+      font-size: 3.5vw;
+      font-weight: 700;
+      line-height: 1.25;
+      word-break: break-word;
+    }
 
     .swap-icon {
       position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
@@ -243,7 +260,9 @@
           <span>🎤 語音輸入</span>
           <span id="source-lang-label" style="font-size:0.8vw; color:#8b949e; margin-left:auto;">(英文)</span>
         </div>
-        <div id="speech-text" class="box-content">等待語音輸入...</div>
+        <div class="box-content">
+          <div id="speech-text">等待語音輸入...</div>
+        </div>
         <div class="box-footer">
           <div class="footer-btn-group">
             <button id="tts-source-btn" class="icon-btn" onclick="speakText('speech-text', true)" title="聆聽發音">
@@ -266,7 +285,9 @@
           <span>🌐 即時校正與翻譯</span>
           <span id="target-lang-label" style="font-size:0.8vw; color:#8b949e; margin-left:auto;">(繁體中文)</span>
         </div>
-        <div id="trans-text" class="box-content">等待翻譯服務串接...</div>
+        <div class="box-content">
+          <div id="trans-text">等待翻譯服務串接...</div>
+        </div>
         <div class="box-footer">
           <div class="footer-btn-group">
             <button id="tts-trans-btn" class="icon-btn" onclick="speakText('trans-text', false)" title="聆聽發音">
@@ -411,20 +432,39 @@
         lang = getLangCode(targetLangName) || 'zh-TW';
       }
       utterance.lang = lang;
+    function updateBoxText(elementId, text, isHtml = false) {
+      const element = document.getElementById(elementId);
+      if (!element) return;
       
-      utterance.onstart = () => {
-        btn.classList.add('speaking');
-      };
+      if (isHtml) {
+        element.innerHTML = text;
+      } else {
+        element.innerText = text;
+      }
       
-      utterance.onend = () => {
-        btn.classList.remove('speaking');
-      };
+      // 動態計算字型大小
+      const charCount = text.length;
+      let baseSize = elementId === 'speech-text' ? speechFontSize : transFontSize;
       
-      utterance.onerror = () => {
-        btn.classList.remove('speaking');
-      };
+      let scaledSize = baseSize;
+      if (charCount > 30) {
+        const overflow = charCount - 30;
+        scaledSize = baseSize * Math.max(0.65, 1 - (overflow * 0.003));
+      }
       
-      window.speechSynthesis.speak(utterance);
+      // 限制最小字體不可低於 2.2vw (確保遠處看得清)，最大不可高於原本設定的 baseSize
+      const minReadableSize = 2.2; 
+      scaledSize = Math.max(minReadableSize, Math.min(scaledSize, baseSize));
+      
+      element.style.fontSize = scaledSize + 'vw';
+      
+      // 自動滾動到最底部
+      setTimeout(() => {
+        const parent = element.parentElement;
+        if (parent) {
+          parent.scrollTop = parent.scrollHeight;
+        }
+      }, 10);
     }
 
     // --- Groq API & 金鑰管理邏輯 ---
@@ -485,7 +525,7 @@
     function checkKeyStatus() {
       // 翻譯與語音功能皆不需要此處對摘要的特別狀態提示
       if (transBox.innerText === '等待翻譯服務串接...') {
-        transBox.innerText = '等待語音輸入...';
+        updateBoxText('trans-text', '等待語音輸入...');
       }
     }
 
@@ -506,7 +546,7 @@
       if (!cleanText || cleanText === lastTranslatedText) return;
 
       // 顯示翻譯中動畫
-      transBox.innerHTML = '<div class="loading-dots"><span></span><span></span><span></span><span style="font-size: 1vw; margin-left: 8px; color: #8b949e;">翻譯中...</span></div>';
+      updateBoxText('trans-text', '<div class="loading-dots"><span></span><span></span><span></span><span style="font-size: 1vw; margin-left: 8px; color: #8b949e;">翻譯中...</span></div>', true);
 
       try {
         const sourceLangCode = getLangCode(sourceLang) || 'auto';
@@ -531,13 +571,13 @@
 
         if (translated) {
           lastTranslatedText = cleanText;
-          transBox.innerText = translated;
+          updateBoxText('trans-text', translated);
         } else {
-          transBox.innerText = '翻譯結果為空';
+          updateBoxText('trans-text', '翻譯結果為空');
         }
       } catch (err) {
         console.error('Translation failed:', err);
-        transBox.innerHTML = `<span style="color:#ef4444; font-size:1.5vw;">翻譯失敗: ${err.message}</span>`;
+        updateBoxText('trans-text', `<span style="color:#ef4444; font-size:1.5vw;">翻譯失敗: ${err.message}</span>`, true);
       }
     }
 
@@ -553,7 +593,7 @@
       const data = snapshot.val();
       if (!data || !data.text) return;
 
-      speechBox.innerHTML = applyHighlights(data.text);
+      updateBoxText('speech-text', applyHighlights(data.text), true);
 
       let sourceLangVal = '';
       let targetLangNameVal = '';
