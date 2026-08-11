@@ -8,7 +8,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-  <script src="https://js.puter.com/v2/"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -163,7 +162,7 @@
   <header>
     <div>頻道：<span id="room-display" class="stats-val">----</span> | 總字數：<span id="stat-words" class="stats-val">0</span> | 語速：<span id="stat-wpm" class="stats-val">0</span> 字/分</div>
     <div>
-      <button class="btn" onclick="openKeyModal()">⚙️ 設定 Gemini 金鑰</button>
+      <button class="btn" onclick="openKeyModal()">⚙️ 設定 Groq 金鑰</button>
       <button class="btn" onclick="importSheetsKeywords()">匯入 Google 試算表關鍵字</button>
       <button class="btn" style="background:#238636; color:#fff;" onclick="downloadTranscript()">下載逐字稿</button>
     </div>
@@ -208,17 +207,17 @@
   <div id="key-modal" class="modal-overlay" onclick="closeKeyModalOnOuterClick(event)">
     <div class="modal-content">
       <div class="modal-header">
-        <div class="modal-title">⚙️ 設定 Gemini API 金鑰</div>
+        <div class="modal-title">⚙️ 設定 Groq API 金鑰</div>
         <button class="modal-close" onclick="closeKeyModal()">×</button>
       </div>
       <div class="modal-body">
-        <p>請輸入您的 Gemini API 金鑰以啟用實時翻譯與摘要功能。金鑰僅儲存在您的瀏覽器本地 (localStorage)，不會上傳至任何伺服器。</p>
-        <p>若您還沒有金鑰，可以至 <a href="https://aistudio.google.com/" target="_blank" class="modal-link">Google AI Studio</a> 免費申請。</p>
-        <input type="password" id="gemini-key-input" class="input-field" placeholder="請輸入 AI Studio API Key...">
+        <p>請輸入您的 Groq API 金鑰以啟用 AI 語音辨識與話題摘要功能。此金鑰僅會安全儲存在您的瀏覽器本地 (localStorage) 並同步至 Firebase，以便手機端自動讀取，不會公開外洩。</p>
+        <p>若您還沒有金鑰，可以至 <a href="https://console.groq.com/" target="_blank" class="modal-link">Groq Cloud Console</a> 免費申請。</p>
+        <input type="password" id="groq-key-input" class="input-field" placeholder="請輸入 Groq API Key (gsk_...)">
       </div>
       <div class="modal-footer">
         <button class="btn" onclick="closeKeyModal()">取消</button>
-        <button class="btn" style="background: #0284c7; color: #fff; border-color: #0284c7;" onclick="saveGeminiKey()">儲存</button>
+        <button class="btn" style="background: #0284c7; color: #fff; border-color: #0284c7;" onclick="saveGroqKey()">儲存</button>
       </div>
     </div>
   </div>
@@ -268,11 +267,11 @@
     const transBox = document.getElementById('trans-text');
     const summaryBox = document.getElementById('summary-text');
 
-    // --- Gemini API & 金鑰管理邏輯 ---
+    // --- Groq API & 金鑰管理邏輯 ---
     function openKeyModal() {
       const modal = document.getElementById('key-modal');
-      const input = document.getElementById('gemini-key-input');
-      input.value = localStorage.getItem('gemini_api_key') || '';
+      const input = document.getElementById('groq-key-input');
+      input.value = localStorage.getItem('groq_api_key') || '';
       modal.style.display = 'flex';
       setTimeout(() => modal.classList.add('active'), 10);
     }
@@ -289,14 +288,17 @@
       }
     }
 
-    function saveGeminiKey() {
-      const val = document.getElementById('gemini-key-input').value.trim();
+    function saveGroqKey() {
+      const val = document.getElementById('groq-key-input').value.trim();
       if (val) {
-        localStorage.setItem('gemini_api_key', val);
-        alert('Gemini API 金鑰儲存成功！');
+        localStorage.setItem('groq_api_key', val);
+        // 推送到 Firebase，讓發話端自動取得
+        db.ref(`rooms/${roomId}/groq_key`).set(val);
+        alert('Groq API 金鑰儲存成功，且已自動同步至發話端！');
       } else {
-        localStorage.removeItem('gemini_api_key');
-        alert('已清除 Gemini API 金鑰。');
+        localStorage.removeItem('groq_api_key');
+        db.ref(`rooms/${roomId}/groq_key`).remove();
+        alert('已清除 Groq API 金鑰。');
       }
       closeKeyModal();
       checkKeyStatus();
@@ -316,20 +318,26 @@
       return l;
     }
 
-    // 預設 Gemini API 金鑰（留空，由使用者點擊右上角手動設定）
-    const DEFAULT_GEMINI_KEY = "";
-
-    function getGeminiKey() {
-      return localStorage.getItem('gemini_api_key') || DEFAULT_GEMINI_KEY;
+    function getGroqKey() {
+      return localStorage.getItem('groq_api_key') || '';
     }
 
     function checkKeyStatus() {
-      // 翻譯與摘要功能目前皆有免金鑰的替代方案 (Google 翻譯 & Puter.js)
+      const key = getGroqKey();
+      
+      // 翻譯功能目前使用 Google 翻譯網頁版免金鑰 API，不需要金鑰提示
       if (transBox.innerText === '等待翻譯服務串接...' || transBox.innerText.includes('請點擊右上角')) {
         transBox.innerText = '等待語音輸入...';
       }
-      if (summaryBox.innerText === '等待摘要服務串接...' || summaryBox.innerText.includes('請點擊右上角')) {
-        summaryBox.innerText = '等待語音輸入以產生話題摘要...';
+      
+      if (!key) {
+        if (summaryBox.innerText === '等待摘要服務串接...' || summaryBox.innerText.includes('等待語音輸入')) {
+          summaryBox.innerHTML = '<span style="color:#8b949e; font-size:1.4vw;">請點擊右上角「⚙️ 設定 Groq 金鑰」以啟動話題摘要</span>';
+        }
+      } else {
+        if (summaryBox.innerText === '等待摘要服務串接...' || summaryBox.innerText.includes('請點擊右上角')) {
+          summaryBox.innerText = '等待語音輸入以產生話題摘要...';
+        }
       }
     }
 
@@ -390,14 +398,19 @@
       translateText(text, sourceLang, targetLangName);
     }, 600);
 
-    // 呼叫 AI 產生課堂摘要 (有金鑰使用 Gemini，無金鑰自動使用免金鑰的 Puter.js)
+    // 呼叫 Groq Chat Completion API 產生課堂摘要
     async function generateSummary() {
       if (fullTranscriptList.length === 0) return;
+
+      const apiKey = getGroqKey();
+      if (!apiKey) {
+        checkKeyStatus();
+        return;
+      }
 
       // 顯示摘要中動畫
       summaryBox.innerHTML = '<div class="loading-dots"><span></span><span></span><span></span><span style="font-size: 1vw; margin-left: 8px; color: #7dd3fc;">AI 正在彙整摘要中...</span></div>';
 
-      const apiKey = getGeminiKey();
       const transcriptText = fullTranscriptList.join('\n');
       const systemPrompt = `You are an AI classroom teaching assistant. Based on the following transcript history of the lecture so far, generate a concise, bullet-pointed summary of the main topics discussed. 
 Requirements:
@@ -410,58 +423,37 @@ Requirements:
 Lecture transcript history:
 ${transcriptText}`;
 
-      if (apiKey) {
-        try {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-
-          const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              contents: [{
-                parts: [{ text: systemPrompt }]
-              }],
-              generationConfig: {
-                temperature: 0.3,
-                maxOutputTokens: 800
-              }
-            })
-          });
-
-          if (!response.ok) {
-            throw new Error(`Gemini API 錯誤: ${response.status}`);
-          }
-
-          const data = await response.json();
-          const summary = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-
-          if (summary) {
-            summaryBox.innerText = summary;
-            return;
-          }
-        } catch (err) {
-          console.warn('Gemini summary failed, falling back to Puter:', err);
-          // 失敗時自動降級使用 Puter.js
-        }
-      }
-
-      // 使用免金鑰的 Puter.js 進行話題摘要
       try {
-        if (typeof puter === 'undefined') {
-          throw new Error('Puter SDK 未載入，請檢查網路連線');
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: 'llama3-8b-8192',
+            messages: [
+              { role: 'user', content: systemPrompt }
+            ],
+            temperature: 0.3,
+            max_tokens: 800
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Groq API 錯誤: ${response.status}`);
         }
 
-        const summary = await puter.ai.chat(systemPrompt);
+        const data = await response.json();
+        const summary = data.choices?.[0]?.message?.content?.trim();
 
-        if (summary && summary.trim()) {
-          summaryBox.innerText = summary.trim();
+        if (summary) {
+          summaryBox.innerText = summary;
         } else {
           summaryBox.innerText = '摘要結果為空';
         }
       } catch (err) {
-        console.error('Puter summary failed:', err);
+        console.error('Summary generation failed:', err);
         summaryBox.innerHTML = `<span style="color:#ef4444; font-size:1.2vw;">無法產生摘要: ${err.message}</span>`;
       }
     }
@@ -506,7 +498,7 @@ ${transcriptText}`;
       fullTranscriptList.push(data.text);
       updateStats(data.text);
 
-      // 觸發 AI 話題摘要功能（有金鑰使用 Gemini，無金鑰自動降級使用 Puter.js）
+      // 觸發 AI 話題摘要功能（使用 Groq Llama-3 進行彙整）
       debouncedGenerateSummary();
     });
 
