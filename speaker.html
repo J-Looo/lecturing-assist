@@ -1,35 +1,110 @@
-// 1. 下拉選單切換時，如果正在收音，強制重啟以套用新語言！
-    document.getElementById('sourceLangSelect').onchange = () => {
-      const newLang = document.getElementById('sourceLangSelect').value;
-      console.log("切換語音辨識語言為：", newLang);
-      
-      if (isListening && recognition) {
-        recognition.stop(); // 先停止
-        setTimeout(() => {
-          recognition.lang = newLang; // 指定新語言
-          try {
-            recognition.start(); // 重新啟動
-          } catch(e) {}
-        }, 300);
-      }
-    };
+// 宣告切換語言中的保護旗標，防止 onend 與 setTimeout 衝突
+let isChangingLang = false;
 
-    // 2. 麥克風按鈕點擊事件
-    document.getElementById('micBtn').onclick = () => {
-      if (!recognition) return alert("瀏覽器不支援語音辨識！");
-      
-      if (!isListening) {
-        // 啟動「前」強制讀取當前下拉選單的值
-        const currentSelectedLang = document.getElementById('sourceLangSelect').value;
-        recognition.lang = currentSelectedLang;
-        
-        try {
-          recognition.start();
-        } catch(e) {
-          console.error("啟動失敗", e);
-        }
-      } else {
-        isListening = false;
-        recognition.stop();
+// 取得目標語言名稱（用於顯示與傳給 Gemini）
+function getTargetLangName() {
+  const targetSelect = document.getElementById('targetLangSelect');
+  return targetSelect ? targetSelect.options[targetSelect.selectedIndex].text : '繁體中文';
+}
+
+function getSourceLangName() {
+  const sourceSelect = document.getElementById('sourceLangSelect');
+  return sourceSelect ? sourceSelect.options[sourceSelect.selectedIndex].text : '英文';
+}
+
+// 1. 下拉選單切換時（來源語言）
+document.getElementById('sourceLangSelect').onchange = () => {
+  const newLang = document.getElementById('sourceLangSelect').value;
+  console.log("切換語音辨識語言為：", newLang);
+
+  // 不管有沒有在錄音，先更新 recognition 的語言設定
+  if (recognition) {
+    recognition.lang = newLang;
+  }
+
+  // 同步更新 Firebase 語言狀態
+  db.ref(`rooms/${roomId}/speech_live`).update({
+    sourceLang: getSourceLangName()
+  });
+
+  // 如果正在收音，進行「安全重啟」
+  if (isListening && recognition) {
+    isChangingLang = true; // 標記正在切換語言，防止 onend 干擾
+    recognition.stop();
+
+    setTimeout(() => {
+      try {
+        recognition.start();
+        console.log("語音辨識已順利重啟，新語言：", newLang);
+      } catch (e) {
+        console.error("重啟語音辨識失敗：", e);
+      } finally {
+        isChangingLang = false;
       }
-    };
+    }, 350); // 給予 350ms 確保系統完全釋放麥克風資源
+  }
+};
+
+// 1b. 下拉選單切換時（目標翻譯語言）
+if (document.getElementById('targetLangSelect')) {
+  document.getElementById('targetLangSelect').onchange = () => {
+    db.ref(`rooms/${roomId}/speech_live`).update({
+      targetLangName: getTargetLangName()
+    });
+  };
+}
+
+// 2. 麥克風按鈕點擊事件
+document.getElementById('micBtn').onclick = () => {
+  if (!recognition) return alert("瀏覽器不支援語音辨識！");
+
+  if (!isListening) {
+    // 啟動前確定載入最新的語言選擇
+    const currentSelectedLang = document.getElementById('sourceLangSelect').value;
+    recognition.lang = currentSelectedLang;
+    isListening = true;
+
+    try {
+      recognition.start();
+      updateMicUI(true); // 更新 UI 為錄音中
+    } catch (e) {
+      console.error("啟動失敗", e);
+      isListening = false;
+      updateMicUI(false);
+    }
+  } else {
+    isListening = false;
+    recognition.stop();
+    updateMicUI(false); // 更新 UI 為停止錄音
+  }
+};
+
+// 3. 關鍵修正：recognition.onend 事件防護
+recognition.onend = () => {
+  // 如果是因為切換語言而發生的 stop，不要在這裡干擾，由 setTimeout 處理 start()
+  if (isChangingLang) return;
+
+  // 若使用者維持在錄音狀態（例如語音辨識因斷句自動停止），則自動重新啟動
+  if (isListening) {
+    try {
+      recognition.start();
+    } catch (e) {
+      console.log("自動續播啟動中...", e);
+    }
+  } else {
+    updateMicUI(false);
+  }
+};
+
+// 輔助函式：切換麥克風按鈕 UI 樣式
+function updateMicUI(active) {
+  const micBtn = document.getElementById('micBtn');
+  if (!micBtn) return;
+  if (active) {
+    micBtn.classList.add('recording');
+    micBtn.innerText = '🛑 停止收音';
+  } else {
+    micBtn.classList.remove('recording');
+    micBtn.innerText = '🎤 開始收音';
+  }
+}
