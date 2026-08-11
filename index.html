@@ -601,7 +601,8 @@
       }
     }
 
-    // 補齊語音朗讀 AI 回答的函數
+
+// 1. AI 回答語音朗讀函數
 function speakQnAReply(text) {
   if (!('speechSynthesis' in window)) return;
   try {
@@ -613,11 +614,11 @@ function speakQnAReply(text) {
     console.error("語音發音朗讀失敗:", e);
   }
 }
-    // --- Groq Q&A 對答核心請求與語音播放 ---
-    async function askGroqAI(question, apiKey) {
+
+// 2. Groq AI 請求函數
+async function askGroqAI(question, apiKey) {
   const url = "https://api.groq.com/openai/v1/chat/completions";
   const payload = {
-    // 使用 Groq 官方現行標準模型 ID
     model: "llama-3.3-70b-versatile",
     messages: [
       {
@@ -644,7 +645,6 @@ function speakQnAReply(text) {
     });
 
     if (!response.ok) {
-      // 若 70B 模型回傳 400/404，自動降級嘗試極速版 8B 模型
       if (response.status === 404 || response.status === 400) {
         payload.model = "llama-3.1-8b-instant";
         const retryResponse = await fetch(url, {
