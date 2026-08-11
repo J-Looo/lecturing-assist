@@ -435,46 +435,41 @@
   </div>
 
   <script>
-    // 儲存 AI 語音問答的對話歷史
-let aiConversationHistory = [];
-    // 強制掛載至全域 window 物件，防止 Scope 區域變數與名稱大小寫錯位問題
-window.speakQnAReply = function(text) {
-  if (!('speechSynthesis' in window)) return;
-  try {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'zh-TW';
+    // --- 全域保證：自然人聲語音朗讀 (類似 Copilot 語音) ---
+    window.speakQnAReply = function(text) {
+      if (!('speechSynthesis' in window)) return;
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'zh-TW';
 
-    // 取得瀏覽器所有可用語音
-    const voices = window.speechSynthesis.getVoices();
+        // 自動挑選高品質自然神經網路語音包 (Copilot / Natural Voice)
+        const voices = window.speechSynthesis.getVoices();
+        const preferredVoice = voices.find(v => 
+          (v.lang === 'zh-TW' || v.lang === 'zh_TW' || v.lang.includes('zh')) &&
+          (v.name.includes('Natural') || v.name.includes('HsiaoChen') || v.name.includes('YunJhe') || v.name.includes('Google') || v.name.includes('Online'))
+        ) || voices.find(v => v.lang.includes('zh'));
 
-    // 優先尋找 Microsoft Natural / Natural 神經網路高質感語音 (如 Copilot 常用語音)
-    const preferredVoice = voices.find(v => 
-      (v.lang === 'zh-TW' || v.lang === 'zh_TW' || v.lang.includes('zh')) &&
-      (v.name.includes('Natural') || v.name.includes('HsiaoChen') || v.name.includes('YunJhe') || v.name.includes('Google') || v.name.includes('Online'))
-    ) || voices.find(v => v.lang.includes('zh'));
+        if (preferredVoice) {
+          utterance.voice = preferredVoice;
+        }
 
-    if (preferredVoice) {
-      utterance.voice = preferredVoice;
+        utterance.rate = 0.95; // 稍微放慢速度，聽感更生動清晰
+        utterance.pitch = 1.0;
+
+        window.speechSynthesis.speak(utterance);
+      } catch (e) {
+        console.error("語音發音朗讀失敗:", e);
+      }
+    };
+
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.getVoices();
+      };
     }
 
-    // 微調語調與語速，讓聽感更自然
-    utterance.rate = 0.95; // 稍微放慢語速，適合課堂收聽
-    utterance.pitch = 1.0;
-
-    window.speechSynthesis.speak(utterance);
-  } catch (e) {
-    console.error("語音發音朗讀失敗:", e);
-  }
-};
-
-// 確保語音清單載入完畢 (針對 Chrome/Edge 異步載入 voices 的修復)
-if ('speechSynthesis' in window) {
-  window.speechSynthesis.onvoiceschanged = () => {
-    window.speechSynthesis.getVoices();
-  };
-}
-    // --- 題目切換與初始化邏輯 ---
+    // --- 主題切換與初始化邏輯 ---
     function toggleTheme() {
       const body = document.body;
       const btn = document.getElementById('theme-toggle-btn');
@@ -500,7 +495,6 @@ if ('speechSynthesis' in window) {
       }
     })();
 
-    // 補齊缺失的 Groq 金鑰讀取函數（重要修復）
     function getGroqKey() {
       return localStorage.getItem('groq_api_key') || '';
     }
@@ -640,73 +634,81 @@ if ('speechSynthesis' in window) {
       }
     }
 
+    // --- Groq Q&A 對答核心（具備記憶功能上下文）---
+    let aiConversationHistory = [];
 
-// 1. AI 回答語音朗讀函數
-function speakQnAReply(text) {
-  if (!('speechSynthesis' in window)) return;
-  try {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'zh-TW';
-    window.speechSynthesis.speak(utterance);
-  } catch (e) {
-    console.error("語音發音朗讀失敗:", e);
-  }
-}
+    async function askGroqAI(question, apiKey) {
+      const url = "https://api.groq.com/openai/v1/chat/completions";
 
-async function askGroqAI(question, apiKey) {
-  const url = "https://api.groq.com/openai/v1/chat/completions";
+      // 推入最新的提問紀錄
+      aiConversationHistory.push({ role: "user", content: question });
 
-  // 將最新問題加入歷史紀錄
-  aiConversationHistory.push({ role: "user", content: question });
+      // 保留近 10 輪對話
+      if (aiConversationHistory.length > 20) {
+        aiConversationHistory = aiConversationHistory.slice(-20);
+      }
 
-  // 只保留近 10 輪對話，避免請求太大
-  if (aiConversationHistory.length > 20) {
-    aiConversationHistory = aiConversationHistory.slice(-20);
-  }
+      const payload = {
+        model: "llama-3.3-70b-versatile",
+        messages: [
+          {
+            role: "system",
+            content: "你是一個國中小課堂助教 AI。請使用簡短、清晰、生動有趣、適合學生的繁體中文來回答老師的問題。字數限制在 120 字以內，非常適合投影在教室大螢幕上供學生全班閱讀。請根據過往對話上下文持續回答。"
+          },
+          ...aiConversationHistory
+        ],
+        max_tokens: 250,
+        temperature: 0.7
+      };
 
-  const payload = {
-    model: "llama-3.3-70b-versatile",
-    messages: [
-      {
-        role: "system",
-        content: "你是一個國中小課堂助教 AI。請使用簡短、清晰、生動有趣、適合學生的繁體中文來回答老師的問題。字數限制在 120 字以內，非常適合投影在教室大螢幕上供學生全班閱讀。請根據過往的對話上下文繼續回答。"
-      },
-      ...aiConversationHistory // 自動帶入歷史對話紀錄
-    ],
-    max_tokens: 250,
-    temperature: 0.7
-  };
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
 
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
-    });
+        if (!response.ok) {
+          if (response.status === 404 || response.status === 400) {
+            payload.model = "llama-3.1-8b-instant";
+            const retryResponse = await fetch(url, {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${apiKey}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify(payload)
+            });
 
-    if (!response.ok) {
-      const errJson = await response.json().catch(() => ({}));
-      throw new Error(`Groq API 錯誤 (${response.status}): ${errJson.error?.message || '請求無效'}`);
+            if (retryResponse.ok) {
+              const retryData = await retryResponse.json();
+              const replyText = retryData.choices[0].message.content.trim();
+              aiConversationHistory.push({ role: "assistant", content: replyText });
+              return replyText;
+            }
+          }
+
+          const errJson = await response.json().catch(() => ({}));
+          throw new Error(`Groq API 錯誤 (${response.status}): ${errJson.error?.message || '請求格式無效'}`);
+        }
+
+        const data = await response.json();
+        const aiAnswer = data.choices[0].message.content.trim();
+        
+        // 將回答加入對話歷史以實現記憶
+        aiConversationHistory.push({ role: "assistant", content: aiAnswer });
+
+        return aiAnswer;
+
+      } catch (err) {
+        aiConversationHistory.pop(); // 失敗時移除問題，維持對話紀錄乾淨
+        console.error("Groq API Call Failed:", err);
+        throw err;
+      }
     }
-
-    const data = await response.json();
-    const aiAnswer = data.choices[0].message.content.trim();
-
-    // 將 AI 的回答也存入對話歷史
-    aiConversationHistory.push({ role: "assistant", content: aiAnswer });
-
-    return aiAnswer;
-  } catch (err) {
-    // 發生錯誤時移除剛剛失敗的問題，避免影響後續對話
-    aiConversationHistory.pop();
-    console.error("Groq API Call Failed:", err);
-    throw err;
-  }
-}
 
     // 1. 初始化 Firebase 軟容錯
     let db = null;
@@ -763,7 +765,6 @@ async function askGroqAI(question, apiKey) {
       }
     }
 
-    // 轉義正則表達式特殊字元
     function escapeRegExp(string) {
       return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
@@ -790,13 +791,11 @@ async function askGroqAI(question, apiKey) {
     const speechBox = document.getElementById('speech-text');
     const transBox = document.getElementById('trans-text');
 
-    // 初始化與讀取字型大小偏好
     let speechFontSize = parseFloat(localStorage.getItem('speech_font_size')) || 3.5;
     let transFontSize = parseFloat(localStorage.getItem('trans_font_size')) || 3.5;
     if (speechBox) speechBox.style.fontSize = speechFontSize + 'vw';
     if (transBox) transBox.style.fontSize = transFontSize + 'vw';
 
-    // 字型大小調整函數
     function adjustFontSize(elementId, delta) {
       const element = document.getElementById(elementId);
       if (!element) return;
@@ -814,7 +813,6 @@ async function askGroqAI(question, apiKey) {
       element.style.fontSize = currentSize + 'vw';
     }
 
-    // 語音播放 (TTS) 函數
     let currentSpeechUtterance = null;
     function speakText(elementId, isSource) {
       if (!('speechSynthesis' in window)) return alert('您的瀏覽器不支援語音合成功能');
@@ -871,7 +869,6 @@ async function askGroqAI(question, apiKey) {
       window.speechSynthesis.speak(utterance);
     }
 
-    // 智慧字體適應與自動滾動置底
     function updateBoxText(elementId, text, isHtml = false) {
       const element = document.getElementById(elementId);
       if (!element) return;
@@ -904,7 +901,6 @@ async function askGroqAI(question, apiKey) {
       }, 10);
     }
 
-    // --- Groq API & 金鑰管理邏輯 ---
     function openKeyModal() {
       const modal = document.getElementById('key-modal');
       const input = document.getElementById('groq-key-input');
@@ -1014,7 +1010,7 @@ async function askGroqAI(question, apiKey) {
         }
       } catch (err) {
         console.error('Translation failed:', err);
-        lastTranslatedText = ''; // 發生錯誤時允許下次再次重試
+        lastTranslatedText = '';
         updateBoxText('trans-text', `<span style="color:#ef4444; font-size:1.5vw;">翻譯失敗: ${err.message}</span>`, true);
       }
     }
@@ -1119,7 +1115,7 @@ async function askGroqAI(question, apiKey) {
                   status: 'replied'
                 });
 
-                speakQnAReply(reply);
+                window.speakQnAReply(reply);
 
                 const qaText = `[教師提問 AI]：${data.question}\n[AI 回答]：${reply}\n`;
                 fullTranscriptList.push(qaText);
@@ -1135,7 +1131,7 @@ async function askGroqAI(question, apiKey) {
                   answer: errMsg,
                   status: 'replied'
                 });
-                speakQnAReply(errMsg);
+                window.speakQnAReply(errMsg);
               }
             }
           } else if (data.status === 'replied') {
