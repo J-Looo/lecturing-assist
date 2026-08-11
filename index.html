@@ -327,30 +327,50 @@
   </div>
 
   <script>
-    const firebaseConfig = {
-      databaseURL: "https://test-speaker-cb3f5-default-rtdb.asia-southeast1.firebasedatabase.app"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+    // 1. 初始化 Firebase 軟容錯
+    let db = null;
+    try {
+      const firebaseConfig = {
+        databaseURL: "https://test-speaker-cb3f5-default-rtdb.asia-southeast1.firebasedatabase.app"
+      };
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.database();
+    } catch (e) {
+      console.error("Firebase 初始化失敗:", e);
+    }
 
+    // 2. 獲取並設置房間號碼
     const urlParams = new URLSearchParams(window.location.search);
     let roomId = urlParams.get('room') || Math.floor(1000 + Math.random() * 9000).toString();
-    document.getElementById('room-display').innerText = roomId;
+    const roomDisplay = document.getElementById('room-display');
+    if (roomDisplay) {
+      roomDisplay.innerText = roomId;
+    }
 
+    // 3. 生成 QR Code 軟容錯
     const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
     const qrcodeContainer = document.getElementById("qrcode");
-    qrcodeContainer.innerHTML = "";
-    new QRCode(qrcodeContainer, { text: `${baseUrl}/speaker.html?room=${roomId}`, width: 100, height: 100 });
+    if (qrcodeContainer) {
+      qrcodeContainer.innerHTML = "";
+      try {
+        new QRCode(qrcodeContainer, { text: `${baseUrl}/speaker.html?room=${roomId}`, width: 100, height: 100 });
+      } catch (e) {
+        console.error("QRCode 載入失敗:", e);
+        qrcodeContainer.innerText = "無法載入 QR Code 套件";
+      }
+    }
 
     function toggleQR() {
       const qrBody = document.getElementById('qr-body');
       const btn = document.getElementById('qr-toggle-btn');
-      if (qrBody.style.display === 'none') {
-        qrBody.style.display = 'block';
-        btn.innerText = '[-]';
-      } else {
-        qrBody.style.display = 'none';
-        btn.innerText = '[+]';
+      if (qrBody && btn) {
+        if (qrBody.style.display === 'none') {
+          qrBody.style.display = 'block';
+          btn.innerText = '[-]';
+        } else {
+          qrBody.style.display = 'none';
+          btn.innerText = '[+]';
+        }
       }
     }
 
@@ -373,8 +393,8 @@
     // 初始化與讀取字型大小偏好
     let speechFontSize = parseFloat(localStorage.getItem('speech_font_size')) || 3.5;
     let transFontSize = parseFloat(localStorage.getItem('trans_font_size')) || 3.5;
-    speechBox.style.fontSize = speechFontSize + 'vw';
-    transBox.style.fontSize = transFontSize + 'vw';
+    if (speechBox) speechBox.style.fontSize = speechFontSize + 'vw';
+    if (transBox) transBox.style.fontSize = transFontSize + 'vw';
 
     // 字型大小調整函數
     function adjustFontSize(elementId, delta) {
@@ -409,15 +429,17 @@
       // 如果正在撥放，點擊則停止
       if (window.speechSynthesis.speaking && currentSpeechUtterance) {
         window.speechSynthesis.cancel();
-        if (btn.classList.contains('speaking')) {
+        if (btn && btn.classList.contains('speaking')) {
           btn.classList.remove('speaking');
           return;
         }
       }
       
       // 清除所有按鈕的 speaking 樣式
-      document.getElementById('tts-source-btn').classList.remove('speaking');
-      document.getElementById('tts-trans-btn').classList.remove('speaking');
+      const sBtn = document.getElementById('tts-source-btn');
+      const tBtn = document.getElementById('tts-trans-btn');
+      if (sBtn) sBtn.classList.remove('speaking');
+      if (tBtn) tBtn.classList.remove('speaking');
       
       const utterance = new SpeechSynthesisUtterance(text);
       currentSpeechUtterance = utterance;
@@ -425,13 +447,32 @@
       // 依語言設定播放語系
       let lang = 'zh-TW';
       if (isSource) {
-        const sourceLangName = document.getElementById('source-lang-label').innerText.replace(/[()]/g, '');
+        const sourceLabel = document.getElementById('source-lang-label');
+        const sourceLangName = sourceLabel ? sourceLabel.innerText.replace(/[()]/g, '') : '英文';
         lang = getLangCode(sourceLangName) || 'zh-TW';
       } else {
-        const targetLangName = document.getElementById('target-lang-label').innerText.replace(/[()]/g, '');
+        const targetLabel = document.getElementById('target-lang-label');
+        const targetLangName = targetLabel ? targetLabel.innerText.replace(/[()]/g, '') : '繁體中文';
         lang = getLangCode(targetLangName) || 'zh-TW';
       }
       utterance.lang = lang;
+      
+      utterance.onstart = () => {
+        if (btn) btn.classList.add('speaking');
+      };
+      
+      utterance.onend = () => {
+        if (btn) btn.classList.remove('speaking');
+      };
+      
+      utterance.onerror = () => {
+        if (btn) btn.classList.remove('speaking');
+      };
+      
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // 智慧字體適應與自動滾動置底
     function updateBoxText(elementId, text, isHtml = false) {
       const element = document.getElementById(elementId);
       if (!element) return;
@@ -471,15 +512,19 @@
     function openKeyModal() {
       const modal = document.getElementById('key-modal');
       const input = document.getElementById('groq-key-input');
-      input.value = localStorage.getItem('groq_api_key') || '';
-      modal.style.display = 'flex';
-      setTimeout(() => modal.classList.add('active'), 10);
+      if (modal && input) {
+        input.value = localStorage.getItem('groq_api_key') || '';
+        modal.style.display = 'flex';
+        setTimeout(() => modal.classList.add('active'), 10);
+      }
     }
 
     function closeKeyModal() {
       const modal = document.getElementById('key-modal');
-      modal.classList.remove('active');
-      setTimeout(() => modal.style.display = 'none', 250);
+      if (modal) {
+        modal.classList.remove('active');
+        setTimeout(() => modal.style.display = 'none', 250);
+      }
     }
 
     function closeKeyModalOnOuterClick(e) {
@@ -489,15 +534,19 @@
     }
 
     function saveGroqKey() {
-      const val = document.getElementById('groq-key-input').value.trim();
+      const valInput = document.getElementById('groq-key-input');
+      const val = valInput ? valInput.value.trim() : '';
       if (val) {
         localStorage.setItem('groq_api_key', val);
-        // 推送到 Firebase，讓發話端自動取得
-        db.ref(`rooms/${roomId}/groq_key`).set(val);
+        if (db) {
+          db.ref(`rooms/${roomId}/groq_key`).set(val);
+        }
         alert('Groq API 金鑰儲存成功，且已自動同步至發話端！');
       } else {
         localStorage.removeItem('groq_api_key');
-        db.ref(`rooms/${roomId}/groq_key`).remove();
+        if (db) {
+          db.ref(`rooms/${roomId}/groq_key`).remove();
+        }
         alert('已清除 Groq API 金鑰。');
       }
       closeKeyModal();
@@ -523,8 +572,7 @@
     }
 
     function checkKeyStatus() {
-      // 翻譯與語音功能皆不需要此處對摘要的特別狀態提示
-      if (transBox.innerText === '等待翻譯服務串接...') {
+      if (transBox && transBox.innerText === '等待翻譯服務串接...') {
         updateBoxText('trans-text', '等待語音輸入...');
       }
     }
@@ -587,48 +635,55 @@
     }, 600);
 
     // --- Firebase 資料監聽與原有功能 ---
+    if (db) {
+      // 監聽 Firebase 實時語音輸入
+      db.ref(`rooms/${roomId}/speech_live`).on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (!data || !data.text) return;
 
-    // 監聽 Firebase 實時語音輸入
-    db.ref(`rooms/${roomId}/speech_live`).on('value', (snapshot) => {
-      const data = snapshot.val();
-      if (!data || !data.text) return;
+        updateBoxText('speech-text', applyHighlights(data.text), true);
 
-      updateBoxText('speech-text', applyHighlights(data.text), true);
+        let sourceLangVal = '';
+        let targetLangNameVal = '';
 
-      let sourceLangVal = '';
-      let targetLangNameVal = '';
+        const sLabel = document.getElementById('source-lang-label');
+        const tLabel = document.getElementById('target-lang-label');
 
-      if (data.sourceLang) {
-        document.getElementById('source-lang-label').innerText = `(${data.sourceLang})`;
-        sourceLangVal = data.sourceLang;
-      }
-      if (data.targetLangName) {
-        document.getElementById('target-lang-label').innerText = `(${data.targetLangName})`;
-        targetLangNameVal = data.targetLangName;
-      }
+        if (data.sourceLang) {
+          if (sLabel) sLabel.innerText = `(${data.sourceLang})`;
+          sourceLangVal = data.sourceLang;
+        }
+        if (data.targetLangName) {
+          if (tLabel) tLabel.innerText = `(${data.targetLangName})`;
+          targetLangNameVal = data.targetLangName;
+        }
 
-      // 觸發翻譯（使用免費的 Google 翻譯，無需金鑰）
-      debouncedTranslate(data.text, sourceLangVal, targetLangNameVal);
-    });
+        // 觸發翻譯（使用免費 of Google 翻譯，無需金鑰）
+        debouncedTranslate(data.text, sourceLangVal, targetLangNameVal);
+      });
+    }
 
     let fullTranscriptList = [];
+    if (db) {
+      // 監聽逐字稿歷史紀錄
+      db.ref(`rooms/${roomId}/speech_history`).on('child_added', (snapshot) => {
+        const data = snapshot.val();
+        if (!data || !data.text) return;
 
-    // 監聽逐字稿歷史紀錄
-    db.ref(`rooms/${roomId}/speech_history`).on('child_added', (snapshot) => {
-      const data = snapshot.val();
-      if (!data || !data.text) return;
-
-      fullTranscriptList.push(data.text);
-      updateStats(data.text);
-    });
+        fullTranscriptList.push(data.text);
+        updateStats(data.text);
+      });
+    }
 
     let totalWordCount = 0;
     let startTime = Date.now();
     function updateStats(text) {
       totalWordCount += text.trim().length;
       const minutes = (Date.now() - startTime) / 60000;
-      document.getElementById('stat-words').innerText = totalWordCount;
-      document.getElementById('stat-wpm').innerText = minutes > 0 ? Math.round(totalWordCount / minutes) : 0;
+      const sWords = document.getElementById('stat-words');
+      const sWpm = document.getElementById('stat-wpm');
+      if (sWords) sWords.innerText = totalWordCount;
+      if (sWpm) sWpm.innerText = minutes > 0 ? Math.round(totalWordCount / minutes) : 0;
     }
 
     function importSheetsKeywords() {
