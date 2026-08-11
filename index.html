@@ -601,6 +601,18 @@
       }
     }
 
+    // 補齊語音朗讀 AI 回答的函數
+function speakQnAReply(text) {
+  if (!('speechSynthesis' in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'zh-TW';
+    window.speechSynthesis.speak(utterance);
+  } catch (e) {
+    console.error("語音發音朗讀失敗:", e);
+  }
+}
     // --- Groq Q&A 對答核心請求與語音播放 ---
     async function askGroqAI(question, apiKey) {
   const url = "https://api.groq.com/openai/v1/chat/completions";
