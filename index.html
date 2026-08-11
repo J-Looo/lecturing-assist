@@ -8,78 +8,313 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <style>
+    :root {
+      /* 深色主題變數 */
+      --bg-body: #0d0f12;
+      --color-text: #e3e8f0;
+      --bg-header: #161b22;
+      --border-color: #30363d;
+      --color-muted: #8b949e;
+      --bg-btn: #21262d;
+      --color-btn: #c9d1d9;
+      --bg-box-speech: #161b22;
+      --bg-box-trans: #111827;
+      --color-speech: #ffffff;
+      --color-trans: #facc15;
+      --bg-modal: #161b22;
+      --bg-input: #0d0f12;
+      --shadow: 0 4px 20px rgba(0,0,0,0.3);
+      --bg-scrollbar-track: #0d0f12;
+      --bg-scrollbar-thumb: #30363d;
+    }
+
+    body.light-theme {
+      /* 淺色主題變數 */
+      --bg-body: #f3f4f6;
+      --color-text: #1f2937;
+      --bg-header: #ffffff;
+      --border-color: #d1d5db;
+      --color-muted: #4b5563;
+      --bg-btn: #ffffff;
+      --color-btn: #374151;
+      --bg-box-speech: #ffffff;
+      --bg-box-trans: #f9fafb;
+      --color-speech: #111827;
+      --color-trans: #0369a1;
+      --bg-modal: #ffffff;
+      --bg-input: #f3f4f6;
+      --shadow: 0 4px 20px rgba(0,0,0,0.06);
+      --bg-scrollbar-track: #f3f4f6;
+      --bg-scrollbar-thumb: #cbd5e1;
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background-color: #0d0f12; color: #e3e8f0;
+      background-color: var(--bg-body); color: var(--color-text);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang TC", "Microsoft JhengHei", sans-serif;
-      height: 100vh; display: flex; flex-direction: column; padding: 1.2vw;
-      justify-content: space-between; overflow: hidden;
+      height: auto; min-height: 100vh; display: flex; flex-direction: column; padding: 1.2vw;
+      justify-content: space-between; overflow-y: auto;
+      transition: background-color 0.2s, color 0.2s;
+    }
+
+    /* 全局網頁右側滾動條樣式 */
+    ::-webkit-scrollbar {
+      width: 12px;
+      height: 12px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg-scrollbar-track);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--bg-scrollbar-thumb);
+      border: 3px solid var(--bg-scrollbar-track);
+      border-radius: 6px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #38bdf8;
     }
 
     header {
       display: flex; justify-content: space-between; align-items: center;
-      background: #161b22; border: 1px solid #30363d; padding: 0.6vw 1.2vw;
-      border-radius: 8px; font-size: 0.85vw; color: #8b949e;
+      background: var(--bg-header); border: 1px solid var(--border-color); padding: 0.6vw 1.2vw;
+      border-radius: 8px; font-size: 0.85vw; color: var(--color-muted);
+      transition: background 0.2s, border-color 0.2s;
     }
     .stats-val { color: #38bdf8; font-weight: bold; }
     .btn {
-      background: #21262d; border: 1px solid #30363d; color: #c9d1d9;
+      background: var(--bg-btn); border: 1px solid var(--border-color); color: var(--color-btn);
       padding: 0.3vw 0.6vw; border-radius: 4px; cursor: pointer; font-size: 0.85vw;
+      transition: all 0.2s ease;
     }
-    .btn:hover { background: #30363d; color: #fff; }
+    .btn:hover { background: var(--border-color); color: var(--bg-body); }
 
-    main { flex: 1; display: flex; flex-direction: column; gap: 1.2vw; margin-top: 1vw; overflow: hidden; }
+    main { display: flex; flex-direction: column; gap: 1.2vw; margin-top: 1vw; overflow: visible; }
 
-    #translate-container { flex: 1.3; display: flex; gap: 1vw; position: relative; }
+    #translate-container { display: flex; flex-direction: column; gap: 1.2vw; position: relative; }
 
     .trans-box {
-      flex: 1; background: #161b22; border: 1px solid #30363d; border-radius: 12px;
-      padding: 1.8vw; display: flex; flex-direction: column; position: relative;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      flex: none;
+      height: 42vh;
+      min-height: 380px;
+      background: var(--bg-box-speech); border: 1px solid var(--border-color); border-radius: 12px;
+      padding: 1.2vw 1.8vw; display: flex; flex-direction: column; position: relative;
+      box-shadow: var(--shadow);
+      justify-content: space-between;
+      transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+    }
+    
+    .trans-box:nth-of-type(2) {
+      background: var(--bg-box-trans);
     }
 
     .box-header {
       display: flex; align-items: center; gap: 8px; font-size: 1.1vw;
-      font-weight: 600; color: #38bdf8; margin-bottom: 1vw;
-      border-bottom: 1px solid #21262d; padding-bottom: 0.5vw;
+      font-weight: 600; color: #38bdf8; margin-bottom: 0.5vw;
+      border-bottom: 1px solid var(--border-color); padding-bottom: 0.5vw;
     }
 
     .box-content {
-      font-size: 3.5vw; font-weight: 700; line-height: 1.25;
-      word-break: break-word; flex: 1; display: flex; align-items: center;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
     }
 
-    #speech-text { color: #ffffff; text-shadow: 0 0 15px rgba(255,255,255,0.1); }
-    #trans-text { color: #facc15; }
+    #speech-text {
+      color: var(--color-speech);
+      text-shadow: 0 0 15px rgba(255,255,255,0.1);
+      margin: auto 0;
+      font-size: 3.5vw;
+      font-weight: 700;
+      line-height: 1.25;
+      word-break: break-word;
+    }
+    
+    #trans-text {
+      color: var(--color-trans);
+      margin: auto 0;
+      font-size: 3.5vw;
+      font-weight: 700;
+      line-height: 1.25;
+      word-break: break-word;
+    }
 
-    .swap-icon {
-      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-      background: #21262d; border: 1px solid #444c56; color: #38bdf8;
-      width: 2.8vw; height: 2.8vw; border-radius: 50%; display: flex;
-      align-items: center; justify-content: center; font-size: 1.4vw; z-index: 10;
+    .box-content::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    .box-content::-webkit-scrollbar-track {
+      background: var(--bg-box-speech);
+      border-radius: 5px;
+    }
+    .box-content::-webkit-scrollbar-thumb {
+      background: var(--bg-btn);
+      border: 2px solid var(--bg-box-speech);
+      border-radius: 5px;
+    }
+    .box-content::-webkit-scrollbar-thumb:hover {
+      background: #38bdf8;
     }
 
     #qr-card {
-      position: absolute; top: 1vw; right: 1vw; background: #161b22;
-      border: 1px solid #444c56; border-radius: 8px; padding: 8px;
+      position: absolute; top: 1vw; right: 1vw; background: var(--bg-header);
+      border: 1px solid var(--border-color); border-radius: 8px; padding: 8px;
       display: flex; flex-direction: column; align-items: center; z-index: 50;
+      transition: background 0.2s, border-color 0.2s;
     }
     .qr-card-header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-    #qr-toggle-btn { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; border-radius: 3px; cursor: pointer; padding: 1px 5px; font-size: 0.7vw; }
+    #qr-toggle-btn { background: var(--bg-btn); border: 1px solid var(--border-color); color: var(--color-btn); border-radius: 3px; cursor: pointer; padding: 1px 5px; font-size: 0.7vw; }
     #qr-body { background: #fff; padding: 4px; border-radius: 4px; }
 
-    #summary-section {
-      flex: 0.7; background: #082f49; border: 1px solid #0284c7;
-      border-radius: 12px; padding: 1.2vw 1.8vw; display: flex;
-      flex-direction: column; justify-content: center;
+    .highlight { background: #854d0e; color: #fef08a; padding: 0 4px; border-radius: 4px; }
+
+    /* 底部控制列與按鈕樣式 */
+    .box-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 0.5vw;
+      border-top: 1px solid var(--border-color);
+      padding-top: 0.6vw;
+    }
+    .footer-btn-group {
+      display: flex;
+      align-items: center;
+      gap: 0.6vw;
+    }
+    .icon-btn {
+      background: none;
+      border: none;
+      color: var(--color-muted);
+      cursor: pointer;
+      width: 2.2vw;
+      height: 2.2vw;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      outline: none;
+    }
+    .icon-btn:hover {
+      background: var(--bg-btn);
+      color: #38bdf8;
+    }
+    .icon-btn:active {
+      transform: scale(0.92);
+    }
+    .icon-btn svg {
+      width: 1.2vw;
+      height: 1.2vw;
+    }
+    .font-btn {
+      font-size: 0.8vw;
+      font-weight: 700;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 0.1vw 0.5vw;
+      width: auto;
+      height: auto;
+      color: var(--color-btn);
+      transition: all 0.2s ease;
+    }
+    .font-btn:hover {
+      background: var(--border-color);
+      color: var(--bg-body);
+    }
+    
+    /* 播放發音呼吸動畫 */
+    .icon-btn.speaking {
+      color: #38bdf8;
+      animation: speak-pulse 1.5s infinite;
+    }
+    @keyframes speak-pulse {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.1); opacity: 0.7; color: #7dd3fc; }
+      100% { transform: scale(1); opacity: 1; }
     }
 
-    .summary-title { font-size: 1vw; color: #7dd3fc; margin-bottom: 0.4vw; font-weight: 600; }
-    #summary-text { font-size: 2.2vw; font-weight: 700; color: #38bdf8; line-height: 1.3; white-space: pre-line; }
+    /* Modal 樣式 */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(13, 15, 18, 0.7); backdrop-filter: blur(8px);
+      display: none; justify-content: center; align-items: center; z-index: 1000;
+      opacity: 0; transition: opacity 0.25s ease-in-out;
+    }
+    .modal-overlay.active {
+      display: flex; opacity: 1;
+    }
+    .modal-content {
+      background: var(--bg-modal); border: 1px solid var(--border-color); border-radius: 16px;
+      width: 90%; max-width: 480px; padding: 2vw; box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+      transform: scale(0.9); transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+      display: flex; flex-direction: column; gap: 1.5vw;
+    }
+    .modal-overlay.active .modal-content {
+      transform: scale(1);
+    }
+    .modal-header {
+      display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid var(--border-color); padding-bottom: 0.8vw;
+    }
+    .modal-title {
+      font-size: 1.2vw; font-weight: 700; color: #38bdf8;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .modal-close {
+      background: none; border: none; color: var(--color-muted); cursor: pointer; font-size: 1.5vw;
+      line-height: 1; transition: color 0.2s;
+    }
+    .modal-close:hover { color: var(--color-text); }
+    
+    .modal-body {
+      display: flex; flex-direction: column; gap: 1vw;
+    }
+    .modal-body p {
+      font-size: 0.85vw; color: var(--color-muted); line-height: 1.5;
+    }
+    .modal-link {
+      color: #38bdf8; text-decoration: none; border-bottom: 1px dashed #38bdf8;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .modal-link:hover {
+      color: #0ea5e9; border-bottom-style: solid;
+    }
+    .input-field {
+      width: 100%; background: var(--bg-input); border: 1px solid var(--border-color);
+      border-radius: 8px; padding: 0.8vw 1vw; color: var(--color-text); font-size: 0.9vw;
+      outline: none; transition: border-color 0.2s, box-shadow: 0.2s;
+    }
+    .input-field:focus {
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+    }
+    .modal-footer {
+      display: flex; justify-content: flex-end; gap: 1vw;
+      border-top: 1px solid var(--border-color); padding-top: 0.8vw;
+    }
 
-    .highlight { background: #854d0e; color: #fef08a; padding: 0 4px; border-radius: 4px; }
+    /* 翻譯中動畫 loading-dots */
+    .loading-dots {
+      display: inline-flex; gap: 6px; align-items: center;
+    }
+    .loading-dots span {
+      width: 0.8vw; height: 0.8vw; background-color: var(--color-trans); border-radius: 50%;
+      display: inline-block; animation: bounce 1.4s infinite ease-in-out both;
+    }
+    .loading-dots span:nth-child(1) { animation-delay: -0.32s; }
+    .loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+    @keyframes flash-bg {
+      0% { background: rgba(220, 38, 38, 0.2); }
+      100% { background: rgba(220, 38, 38, 0.65); }
+    }
   </style>
 </head>
 <body>
@@ -87,8 +322,13 @@
   <header>
     <div>頻道：<span id="room-display" class="stats-val">----</span> | 總字數：<span id="stat-words" class="stats-val">0</span> | 語速：<span id="stat-wpm" class="stats-val">0</span> 字/分</div>
     <div>
-      <button class="btn" onclick="importSheetsKeywords()">匯入 Google 試算表關鍵字</button>
-      <button class="btn" style="background:#238636; color:#fff;" onclick="downloadTranscript()">下載逐字稿</button>
+      <button class="btn" id="theme-toggle-btn" onclick="toggleTheme()">☀️ 淺色主題</button>
+      <button class="btn" onclick="openKeyModal()">⚙️ 設定 Groq 金鑰</button>
+      <button class="btn" onclick="document.getElementById('bell-file-input').click()">🔔 設置自訂鈴聲 (MP3/WAV)</button>
+      <input type="file" id="bell-file-input" style="display: none;" accept="audio/*" onchange="handleBellUpload(event)">
+      <button class="btn" onclick="document.getElementById('keyword-file-input').click()">📁 匯入關鍵字檔案 (.csv/.xlsx/.xls)</button>
+      <input type="file" id="keyword-file-input" style="display: none;" accept=".csv,.xlsx,.xls" onchange="handleKeywordUpload(event)">
+      <button class="btn" style="background:#238636; color:#fff; border-color:#238636;" onclick="downloadTranscript()">下載逐字稿</button>
     </div>
   </header>
 
@@ -102,67 +342,402 @@
         <div id="qr-body"><div id="qrcode"></div></div>
       </div>
 
-      <div class="swap-icon">⇄</div>
-
       <div class="trans-box">
         <div class="box-header">
           <span>🎤 語音輸入</span>
           <span id="source-lang-label" style="font-size:0.8vw; color:#8b949e; margin-left:auto;">(英文)</span>
         </div>
-        <div id="speech-text" class="box-content">等待語音輸入...</div>
+        <div class="box-content">
+          <div id="speech-text">等待語音輸入...</div>
+        </div>
+        <div class="box-footer">
+          <div class="footer-btn-group">
+            <button id="tts-source-btn" class="icon-btn" onclick="speakText('speech-text', true)" title="聆聽發音">
+              <svg class="tts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path class="volume-wave" d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                <path class="volume-wave-outer" d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+              </svg>
+            </button>
+          </div>
+          <div class="footer-btn-group">
+            <button class="icon-btn font-btn" onclick="adjustFontSize('speech-text', -0.3)" title="縮小字體">A-</button>
+            <button class="icon-btn font-btn" onclick="adjustFontSize('speech-text', 0.3)" title="放大字體">A+</button>
+          </div>
+        </div>
       </div>
 
-      <div class="trans-box" style="background: #111827;">
+      <div class="trans-box">
         <div class="box-header" style="color: #facc15;">
           <span>🌐 即時校正與翻譯</span>
           <span id="target-lang-label" style="font-size:0.8vw; color:#8b949e; margin-left:auto;">(繁體中文)</span>
         </div>
-        <div id="trans-text" class="box-content">等待翻譯服務串接...</div>
+        <div class="box-content">
+          <div id="trans-text">等待翻譯服務串接...</div>
+        </div>
+        <div class="box-footer">
+          <div class="footer-btn-group">
+            <button id="tts-trans-btn" class="icon-btn" onclick="speakText('trans-text', false)" title="聆聽發音">
+              <svg class="tts-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path class="volume-wave" d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                <path class="volume-wave-outer" d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+              </svg>
+            </button>
+          </div>
+          <div class="footer-btn-group">
+            <button class="icon-btn font-btn" onclick="adjustFontSize('trans-text', -0.3)" title="縮小字體">A-</button>
+            <button class="icon-btn font-btn" onclick="adjustFontSize('trans-text', 0.3)" title="放大字體">A+</button>
+          </div>
+        </div>
       </div>
-    </section>
-
-    <section id="summary-section">
-      <div class="summary-title">🤖 即時課堂話題摘要</div>
-      <div id="summary-text">等待摘要服務串接...</div>
     </section>
   </main>
 
-  <script>
-    const firebaseConfig = {
-      databaseURL: "https://test-speaker-cb3f5-default-rtdb.asia-southeast1.firebasedatabase.app"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+  <!-- API 金鑰設定 Modal -->
+  <div id="key-modal" class="modal-overlay" onclick="closeKeyModalOnOuterClick(event)">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">⚙️ 設定 Groq API 金鑰</div>
+        <button class="modal-close" onclick="closeKeyModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <p>請輸入您的 Groq API 金鑰以啟用 AI 語音辨識與話題摘要功能。此金鑰僅會安全儲存在您的瀏覽器本地 (localStorage) 並同步至 Firebase，以便手機端自動讀取，不會公開外洩。</p>
+        <p>若您還沒有金鑰，可以至 <a href="https://console.groq.com/" target="_blank" class="modal-link">Groq Cloud Console</a> 免費申請。</p>
+        <input type="password" id="groq-key-input" class="input-field" placeholder="請輸入 Groq API Key (gsk_...)">
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeKeyModal()">取消</button>
+        <button class="btn" style="background: #0284c7; color: #fff; border-color: #0284c7;" onclick="saveGroqKey()">儲存</button>
+      </div>
+    </div>
+  </div>
 
+  <!-- 噪音偵測警告遮罩 -->
+  <div id="noise-alert-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(220, 38, 38, 0.45); backdrop-filter: blur(10px); z-index: 9999; justify-content: center; align-items: center; pointer-events: none; animation: flash-bg 1s infinite alternate;">
+    <div style="font-size: 8vw; font-weight: 900; color: #fff; text-shadow: 0 0 30px rgba(0,0,0,0.8); text-align: center; font-family: Impact, 'Microsoft JhengHei', sans-serif;">
+      ⚠️ 聲音太大囉！請保持安靜 ⚠️
+    </div>
+  </div>
+
+  <!-- AI 提問漂浮大對話框 -->
+  <div id="ai-qna-card" style="display: none; position: fixed; top: 10vh; left: 10vw; width: 80vw; height: 75vh; background: var(--bg-modal); border: 4px solid #38bdf8; border-radius: 24px; padding: 3vw; box-shadow: 0 20px 80px rgba(0,0,0,0.8); z-index: 2000; flex-direction: column; gap: 2vh; box-sizing: border-box; overflow: hidden; transition: background 0.2s, border-color 0.2s;">
+    <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid var(--border-color); padding-bottom: 1.5vh;">
+      <span style="font-size: 2.2vw; font-weight: bold; color: #38bdf8; display: flex; align-items: center; gap: 10px;">🤖 課堂 AI 語音問答</span>
+      <button class="btn" style="background:#da3633; color:#fff; border:none; padding: 0.5vw 1.2vw; border-radius: 8px; font-size: 1.2vw; cursor: pointer;" onclick="if(db) db.ref('rooms/' + roomId + '/ai_qna').remove()">關閉投影</button>
+    </div>
+    <div style="font-size: 2.8vw; font-weight: 800; color: var(--color-speech); word-break: break-word; line-height: 1.3; overflow-y: auto; max-height: 20vh;">
+      老師提問：<span id="ai-qna-question">...</span>
+    </div>
+    <div id="ai-qna-answer-box" style="flex: 1; font-size: 2.6vw; color: var(--color-trans); word-break: break-word; line-height: 1.4; border-top: 2px dashed var(--border-color); padding-top: 2vh; overflow-y: auto; min-height: 100px;">
+      AI 正在分析並編寫回答中...
+    </div>
+  </div>
+
+  <script>
+    // --- 題目切換與初始化邏輯 ---
+    function toggleTheme() {
+      const body = document.body;
+      const btn = document.getElementById('theme-toggle-btn');
+      if (body.classList.contains('light-theme')) {
+        body.classList.remove('light-theme');
+        if (btn) btn.innerText = '☀️ 淺色主題';
+        localStorage.setItem('theme', 'dark');
+      } else {
+        body.classList.add('light-theme');
+        if (btn) btn.innerText = '🌙 深色主題';
+        localStorage.setItem('theme', 'light');
+      }
+    }
+
+    (function initTheme() {
+      const savedTheme = localStorage.getItem('theme') || 'dark';
+      if (savedTheme === 'light') {
+        document.body.classList.add('light-theme');
+        window.addEventListener('DOMContentLoaded', () => {
+          const btn = document.getElementById('theme-toggle-btn');
+          if (btn) btn.innerText = '🌙 深色主題';
+        });
+      }
+    })();
+
+    // 補齊缺失的 Groq 金鑰讀取函數（重要修復）
+    function getGroqKey() {
+      return localStorage.getItem('groq_api_key') || '';
+    }
+
+    // --- IndexedDB 音檔儲存與讀取邏輯 ---
+    const dbName = "BellAudioDB";
+    const storeName = "audioStore";
+    let bellDB = null;
+
+    function initIndexedDB() {
+      try {
+        const request = indexedDB.open(dbName, 1);
+        request.onupgradeneeded = function(e) {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(storeName)) {
+            db.createObjectStore(storeName);
+          }
+        };
+        request.onsuccess = function(e) {
+          bellDB = e.target.result;
+        };
+        request.onerror = function(e) {
+          console.error("IndexedDB 初始化失敗:", e);
+        };
+      } catch (err) {
+        console.error("IndexedDB 啟動失敗:", err);
+      }
+    }
+    initIndexedDB();
+
+    function saveCustomBell(blob) {
+      if (!bellDB) {
+        setTimeout(() => saveCustomBell(blob), 500);
+        return;
+      }
+      try {
+        const transaction = bellDB.transaction([storeName], "readwrite");
+        const store = transaction.objectStore(storeName);
+        const request = store.put(blob, "custom_bell");
+        request.onsuccess = function() {
+          alert("自訂鈴聲音檔上傳並儲存成功！");
+        };
+        request.onerror = function(e) {
+          console.error("音檔儲存失敗:", e);
+          alert("音檔儲存失敗！");
+        };
+      } catch (err) {
+        console.error("儲存過程出錯:", err);
+      }
+    }
+
+    function getCustomBell(callback) {
+      if (!bellDB) return callback(null);
+      try {
+        const transaction = bellDB.transaction([storeName], "readonly");
+        const store = transaction.objectStore(storeName);
+        const request = store.get("custom_bell");
+        request.onsuccess = function(e) {
+          callback(e.target.result || null);
+        };
+        request.onerror = function() {
+          callback(null);
+        };
+      } catch (err) {
+        callback(null);
+      }
+    }
+
+    function handleBellUpload(event) {
+      const file = event.target.files[0];
+      if (file) {
+        saveCustomBell(file);
+      }
+    }
+
+    function playBell() {
+      getCustomBell((blob) => {
+        if (blob) {
+          try {
+            const url = URL.createObjectURL(blob);
+            const audio = new Audio(url);
+            audio.play().catch(err => {
+              console.warn("自訂音檔播放受阻，降級為預設蜂鳴音:", err);
+              playDefaultAirHorn();
+            });
+          } catch (e) {
+            console.error("無法播音，改使用預設音效:", e);
+            playDefaultAirHorn();
+          }
+        } else {
+          playDefaultAirHorn();
+        }
+      });
+    }
+
+    function playDefaultAirHorn() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const audioCtx = new AudioCtx();
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        
+        const osc1 = audioCtx.createOscillator();
+        const osc2 = audioCtx.createOscillator();
+        const osc3 = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+
+        osc1.type = 'sawtooth';
+        osc2.type = 'sawtooth';
+        osc3.type = 'sawtooth';
+
+        osc1.frequency.value = 150;
+        osc2.frequency.value = 220;
+        osc3.frequency.value = 330;
+
+        gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.8, audioCtx.currentTime + 0.05);
+        gainNode.gain.linearRampToValueAtTime(0.8, audioCtx.currentTime + 0.8);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.2);
+
+        osc1.connect(gainNode);
+        osc2.connect(gainNode);
+        osc3.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        osc1.start();
+        osc2.start();
+        osc3.start();
+
+        osc1.stop(audioCtx.currentTime + 1.2);
+        osc2.stop(audioCtx.currentTime + 1.2);
+        osc3.stop(audioCtx.currentTime + 1.2);
+      } catch (err) {
+        console.error("Web Audio API 播音失敗:", err);
+      }
+    }
+
+    // --- Groq Q&A 對答核心請求與語音播放 ---
+    async function askGroqAI(question, apiKey) {
+      const url = "https://api.groq.com/openai/v1/chat/completions";
+      const payload = {
+        model: "llama-3.3-70b-specdec",
+        messages: [
+          {
+            role: "system",
+            content: "你是一個國中小課堂助教 AI。請使用簡短、清晰、生動有趣、適合學生的繁體中文來回答老師的問題。字數限制在 120 字以內，非常適合投影在教室大螢幕上供學生全班閱讀。"
+          },
+          {
+            role: "user",
+            content: question
+          }
+        ],
+        max_tokens: 250,
+        temperature: 0.7
+      };
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        if (response.status === 404 || response.status === 400) {
+          payload.model = "llama3-70b-8192";
+          const retryResponse = await fetch(url, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${apiKey}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+          });
+          if (retryResponse.ok) {
+            const data = await retryResponse.json();
+            return data.choices[0].message.content.trim();
+          }
+        }
+        throw new Error(`Groq API 錯誤: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.choices[0].message.content.trim();
+    }
+
+    function speakQnAReply(text) {
+      if (!('speechSynthesis' in window)) return;
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'zh-TW';
+        window.speechSynthesis.speak(utterance);
+      } catch (e) {
+        console.error("語音發音朗讀失敗:", e);
+      }
+    }
+
+    // 1. 初始化 Firebase 軟容錯
+    let db = null;
+    try {
+      if (typeof firebase !== 'undefined') {
+        const firebaseConfig = {
+          databaseURL: "https://test-speaker-cb3f5-default-rtdb.asia-southeast1.firebasedatabase.app"
+        };
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.database();
+      } else {
+        console.warn("Firebase SDK 未載入");
+      }
+    } catch (e) {
+      console.error("Firebase 初始化失敗:", e);
+    }
+
+    // 2. 獲取並設置房間號碼
     const urlParams = new URLSearchParams(window.location.search);
     let roomId = urlParams.get('room') || Math.floor(1000 + Math.random() * 9000).toString();
-    document.getElementById('room-display').innerText = roomId;
+    const roomDisplay = document.getElementById('room-display');
+    if (roomDisplay) {
+      roomDisplay.innerText = roomId;
+    }
 
-    const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
+    // 3. 生成 QR Code 軟容錯
+    const baseUrl = window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
     const qrcodeContainer = document.getElementById("qrcode");
-    qrcodeContainer.innerHTML = "";
-    new QRCode(qrcodeContainer, { text: `${baseUrl}/speaker.html?room=${roomId}`, width: 100, height: 100 });
+    if (qrcodeContainer) {
+      qrcodeContainer.innerHTML = "";
+      try {
+        if (typeof QRCode !== 'undefined') {
+          new QRCode(qrcodeContainer, { text: `${baseUrl}/speaker.html?room=${roomId}`, width: 100, height: 100 });
+        } else {
+          qrcodeContainer.innerText = "QRCode 套件未載入";
+        }
+      } catch (e) {
+        console.error("QRCode 載入失敗:", e);
+        qrcodeContainer.innerText = "無法載入 QR Code";
+      }
+    }
 
     function toggleQR() {
       const qrBody = document.getElementById('qr-body');
       const btn = document.getElementById('qr-toggle-btn');
-      if (qrBody.style.display === 'none') {
-        qrBody.style.display = 'block';
-        btn.innerText = '[-]';
-      } else {
-        qrBody.style.display = 'none';
-        btn.innerText = '[+]';
+      if (qrBody && btn) {
+        if (qrBody.style.display === 'none') {
+          qrBody.style.display = 'block';
+          btn.innerText = '[-]';
+        } else {
+          qrBody.style.display = 'none';
+          btn.innerText = '[+]';
+        }
       }
+    }
+
+    // 轉義正則表達式特殊字元
+    function escapeRegExp(string) {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
     let customKeywords = [];
     function applyHighlights(text) {
-      if(!text) return '';
+      if (!text) return '';
       let result = text;
       customKeywords.forEach(kw => {
-        if(kw.trim()){
-          const reg = new RegExp(kw.trim(), 'gi');
-          result = result.replace(reg, match => `<span class="highlight">${match}</span>`);
+        const trimmed = kw ? kw.trim() : '';
+        if (trimmed) {
+          try {
+            const escaped = escapeRegExp(trimmed);
+            const reg = new RegExp(escaped, 'gi');
+            result = result.replace(reg, match => `<span class="highlight">${match}</span>`);
+          } catch (e) {
+            console.error("Regex highlight error:", e);
+          }
         }
       });
       return result;
@@ -171,50 +746,403 @@
     const speechBox = document.getElementById('speech-text');
     const transBox = document.getElementById('trans-text');
 
-    // 監聽 Firebase 實時語音輸入
-    db.ref(`rooms/${roomId}/speech_live`).on('value', (snapshot) => {
-      const data = snapshot.val();
-      if (!data || !data.text) return;
+    // 初始化與讀取字型大小偏好
+    let speechFontSize = parseFloat(localStorage.getItem('speech_font_size')) || 3.5;
+    let transFontSize = parseFloat(localStorage.getItem('trans_font_size')) || 3.5;
+    if (speechBox) speechBox.style.fontSize = speechFontSize + 'vw';
+    if (transBox) transBox.style.fontSize = transFontSize + 'vw';
 
-      speechBox.innerHTML = applyHighlights(data.text);
+    // 字型大小調整函數
+    function adjustFontSize(elementId, delta) {
+      const element = document.getElementById(elementId);
+      if (!element) return;
+      
+      let currentSize = 3.5;
+      if (elementId === 'speech-text') {
+        speechFontSize = Math.min(Math.max(speechFontSize + delta, 1.5), 6.5);
+        currentSize = speechFontSize;
+        localStorage.setItem('speech_font_size', speechFontSize);
+      } else if (elementId === 'trans-text') {
+        transFontSize = Math.min(Math.max(transFontSize + delta, 1.5), 6.5);
+        currentSize = transFontSize;
+        localStorage.setItem('trans_font_size', transFontSize);
+      }
+      element.style.fontSize = currentSize + 'vw';
+    }
 
-      if (data.sourceLang) document.getElementById('source-lang-label').innerText = `(${data.sourceLang})`;
-      if (data.targetLangName) document.getElementById('target-lang-label').innerText = `(${data.targetLangName})`;
+    // 語音播放 (TTS) 函數
+    let currentSpeechUtterance = null;
+    function speakText(elementId, isSource) {
+      if (!('speechSynthesis' in window)) return alert('您的瀏覽器不支援語音合成功能');
+      
+      const element = document.getElementById(elementId);
+      if (!element) return;
+      const text = element.innerText;
+      
+      if (!text || text === '等待語音輸入...' || text === '等待翻譯服務串接...') return;
+      
+      const btnId = isSource ? 'tts-source-btn' : 'tts-trans-btn';
+      const btn = document.getElementById(btnId);
+      
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+        if (btn && btn.classList.contains('speaking')) {
+          btn.classList.remove('speaking');
+          return;
+        }
+      }
+      
+      const sBtn = document.getElementById('tts-source-btn');
+      const tBtn = document.getElementById('tts-trans-btn');
+      if (sBtn) sBtn.classList.remove('speaking');
+      if (tBtn) tBtn.classList.remove('speaking');
+      
+      const utterance = new SpeechSynthesisUtterance(text);
+      currentSpeechUtterance = utterance;
+      
+      let lang = 'zh-TW';
+      if (isSource) {
+        const sourceLabel = document.getElementById('source-lang-label');
+        const sourceLangName = sourceLabel ? sourceLabel.innerText.replace(/[()]/g, '') : '英文';
+        lang = getLangCode(sourceLangName) || 'en';
+      } else {
+        const targetLabel = document.getElementById('target-lang-label');
+        const targetLangName = targetLabel ? targetLabel.innerText.replace(/[()]/g, '') : '繁體中文';
+        lang = getLangCode(targetLangName) || 'zh-TW';
+      }
+      utterance.lang = lang;
+      
+      utterance.onstart = () => {
+        if (btn) btn.classList.add('speaking');
+      };
+      
+      utterance.onend = () => {
+        if (btn) btn.classList.remove('speaking');
+      };
+      
+      utterance.onerror = () => {
+        if (btn) btn.classList.remove('speaking');
+      };
+      
+      window.speechSynthesis.speak(utterance);
+    }
 
-      // TODO: 請 Antigravity 在此處補充翻譯功能，並將翻譯結果更新至 transBox.innerText
-    });
+    // 智慧字體適應與自動滾動置底
+    function updateBoxText(elementId, text, isHtml = false) {
+      const element = document.getElementById(elementId);
+      if (!element) return;
+      
+      if (isHtml) {
+        element.innerHTML = text;
+      } else {
+        element.innerText = text;
+      }
+      
+      const charCount = element.innerText ? element.innerText.length : text.length;
+      let baseSize = elementId === 'speech-text' ? speechFontSize : transFontSize;
+      
+      let scaledSize = baseSize;
+      if (charCount > 30) {
+        const overflow = charCount - 30;
+        scaledSize = baseSize * Math.max(0.65, 1 - (overflow * 0.003));
+      }
+      
+      const minReadableSize = 2.2; 
+      scaledSize = Math.max(minReadableSize, Math.min(scaledSize, baseSize));
+      
+      element.style.fontSize = scaledSize + 'vw';
+      
+      setTimeout(() => {
+        const parent = element.parentElement;
+        if (parent) {
+          parent.scrollTop = parent.scrollHeight;
+        }
+      }, 10);
+    }
+
+    // --- Groq API & 金鑰管理邏輯 ---
+    function openKeyModal() {
+      const modal = document.getElementById('key-modal');
+      const input = document.getElementById('groq-key-input');
+      if (modal && input) {
+        input.value = localStorage.getItem('groq_api_key') || '';
+        modal.style.display = 'flex';
+        setTimeout(() => modal.classList.add('active'), 10);
+      }
+    }
+
+    function closeKeyModal() {
+      const modal = document.getElementById('key-modal');
+      if (modal) {
+        modal.classList.remove('active');
+        setTimeout(() => modal.style.display = 'none', 250);
+      }
+    }
+
+    function closeKeyModalOnOuterClick(e) {
+      if (e.target.id === 'key-modal') {
+        closeKeyModal();
+      }
+    }
+
+    function saveGroqKey() {
+      const valInput = document.getElementById('groq-key-input');
+      const val = valInput ? valInput.value.trim() : '';
+      if (val) {
+        localStorage.setItem('groq_api_key', val);
+        if (db) {
+          db.ref(`rooms/${roomId}/groq_key`).set(val);
+        }
+        alert('Groq API 金鑰儲存成功，且已自動同步至發話端！');
+      } else {
+        localStorage.removeItem('groq_api_key');
+        if (db) {
+          db.ref(`rooms/${roomId}/groq_key`).remove();
+        }
+        alert('已清除 Groq API 金鑰。');
+      }
+      closeKeyModal();
+      checkKeyStatus();
+    }
+
+    function getLangCode(lang) {
+      if (!lang) return '';
+      const l = lang.toLowerCase().trim();
+      if (l.includes('zh-tw') || l.includes('繁體中文') || l.includes('traditional') || l.includes('中文 / 中英夾雜') || l.includes('中文')) return 'zh-TW';
+      if (l.includes('zh-cn') || l.includes('简体中文') || l.includes('simplified')) return 'zh-CN';
+      if (l.includes('en') || l.includes('英文') || l.includes('english')) return 'en';
+      if (l.includes('ja') || l.includes('日') || l.includes('japanese')) return 'ja';
+      if (l.includes('ko') || l.includes('韓') || l.includes('korean')) return 'ko';
+      if (l.includes('es') || l.includes('西') || l.includes('spanish')) return 'es';
+      if (l.includes('fr') || l.includes('法') || l.includes('french')) return 'fr';
+      if (l.includes('de') || l.includes('德') || l.includes('german')) return 'de';
+      return l;
+    }
+
+    function checkKeyStatus() {
+      if (transBox && transBox.innerText === '等待翻譯服務串接...') {
+        updateBoxText('trans-text', '等待語音輸入...');
+      }
+    }
+
+    function debounce(func, delay) {
+      let timer;
+      return function (...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => func.apply(this, args), delay);
+      };
+    }
+
+    let lastTranslatedText = '';
+
+    async function translateText(text, sourceLang, targetLangName) {
+      const cleanText = text ? text.trim() : '';
+      if (!cleanText || cleanText === lastTranslatedText) return;
+
+      updateBoxText('trans-text', '<div class="loading-dots"><span></span><span></span><span></span><span style="font-size: 1vw; margin-left: 8px; color: var(--color-muted);">翻譯中...</span></div>', true);
+
+      try {
+        const sourceLangCode = getLangCode(sourceLang) || 'auto';
+        const targetLangCode = getLangCode(targetLangName) || 'zh-TW';
+        
+        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sourceLangCode}&tl=${targetLangCode}&dt=t&q=${encodeURIComponent(cleanText)}`;
+
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`Google 翻譯回應異常: ${response.status}`);
+        }
+
+        const data = await response.json();
+        let translated = '';
+        if (data && data[0]) {
+          data[0].forEach(item => {
+            if (item && item[0]) {
+              translated += item[0];
+            }
+          });
+        }
+
+        if (translated) {
+          lastTranslatedText = cleanText;
+          updateBoxText('trans-text', translated);
+        } else {
+          updateBoxText('trans-text', '翻譯結果為空');
+        }
+      } catch (err) {
+        console.error('Translation failed:', err);
+        lastTranslatedText = ''; // 發生錯誤時允許下次再次重試
+        updateBoxText('trans-text', `<span style="color:#ef4444; font-size:1.5vw;">翻譯失敗: ${err.message}</span>`, true);
+      }
+    }
+
+    const debouncedTranslate = debounce((text, sourceLang, targetLangName) => {
+      translateText(text, sourceLang, targetLangName);
+    }, 600);
+
+    // --- Firebase 資料監聽與原有功能 ---
+    if (db) {
+      db.ref(`rooms/${roomId}/speech_live`).on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (!data || !data.text) return;
+
+        updateBoxText('speech-text', applyHighlights(data.text), true);
+
+        let sourceLangVal = '';
+        let targetLangNameVal = '';
+
+        const sLabel = document.getElementById('source-lang-label');
+        const tLabel = document.getElementById('target-lang-label');
+
+        if (data.sourceLang) {
+          if (sLabel) sLabel.innerText = `(${data.sourceLang})`;
+          sourceLangVal = data.sourceLang;
+        }
+        if (data.targetLangName) {
+          if (tLabel) tLabel.innerText = `(${data.targetLangName})`;
+          targetLangNameVal = data.targetLangName;
+        }
+
+        debouncedTranslate(data.text, sourceLangVal, targetLangNameVal);
+      });
+    }
 
     let fullTranscriptList = [];
-    const summaryBox = document.getElementById('summary-text');
+    if (db) {
+      db.ref(`rooms/${roomId}/speech_history`).on('child_added', (snapshot) => {
+        const data = snapshot.val();
+        if (!data || !data.text) return;
 
-    // 監聽逐字稿歷史紀錄
-    db.ref(`rooms/${roomId}/speech_history`).on('child_added', (snapshot) => {
-      const data = snapshot.val();
-      if (!data || !data.text) return;
+        fullTranscriptList.push(data.text);
+        updateStats(data.text);
+      });
+    }
 
-      fullTranscriptList.push(data.text);
-      updateStats(data.text);
+    if (db) {
+      // 1. 監聽遠端播音鈴聲
+      db.ref(`rooms/${roomId}/commands/play_bell`).on('value', (snapshot) => {
+        const val = snapshot.val();
+        if (val) {
+          if (Date.now() - val < 3000) {
+            playBell();
+          }
+        }
+      });
 
-      // TODO: 請 Antigravity 在此處補充 AI 話題摘要功能，並更新至 summaryBox.innerText
-    });
+      // 2. 監聽噪音警戒狀態
+      db.ref(`rooms/${roomId}/noise_alert`).on('value', (snapshot) => {
+        const data = snapshot.val();
+        const overlay = document.getElementById('noise-alert-overlay');
+        if (overlay) {
+          if (data && data.active && Date.now() - data.timestamp < 3000) {
+            overlay.style.display = 'flex';
+            setTimeout(() => {
+              overlay.style.display = 'none';
+            }, 2500);
+          } else {
+            overlay.style.display = 'none';
+          }
+        }
+      });
+
+      // 3. 監聽 AI 語音問答
+      let lastAIQuestionId = '';
+      db.ref(`rooms/${roomId}/ai_qna`).on('value', async (snapshot) => {
+        const data = snapshot.val();
+        const card = document.getElementById('ai-qna-card');
+        const qEl = document.getElementById('ai-qna-question');
+        const aEl = document.getElementById('ai-qna-answer-box');
+
+        if (data) {
+          if (card) card.style.display = 'flex';
+          if (qEl) qEl.innerText = data.question;
+
+          if (data.status === 'pending') {
+            if (aEl) aEl.innerHTML = '<div class="loading-dots"><span></span><span></span><span></span><span style="font-size: 1.2vw; margin-left: 8px; color: var(--color-muted);">AI 思考中...</span></div>';
+            
+            const questionId = data.question + '_' + data.timestamp;
+            if (questionId !== lastAIQuestionId) {
+              lastAIQuestionId = questionId;
+              try {
+                const apiKey = getGroqKey();
+                if (!apiKey) {
+                  throw new Error("尚未在電腦端設定 Groq 金鑰！");
+                }
+
+                const reply = await askGroqAI(data.question, apiKey);
+                
+                db.ref(`rooms/${roomId}/ai_qna`).update({
+                  answer: reply,
+                  status: 'replied'
+                });
+
+                speakQnAReply(reply);
+
+                const qaText = `[教師提問 AI]：${data.question}\n[AI 回答]：${reply}\n`;
+                fullTranscriptList.push(qaText);
+                
+                db.ref(`rooms/${roomId}/speech_history`).push({
+                  text: qaText,
+                  timestamp: Date.now()
+                });
+              } catch (err) {
+                console.error("AI 提問失敗:", err);
+                const errMsg = `提問失敗: ${err.message}`;
+                db.ref(`rooms/${roomId}/ai_qna`).update({
+                  answer: errMsg,
+                  status: 'replied'
+                });
+                speakQnAReply(errMsg);
+              }
+            }
+          } else if (data.status === 'replied') {
+            if (aEl) aEl.innerText = data.answer;
+          }
+        } else {
+          if (card) card.style.display = 'none';
+        }
+      });
+    }
 
     let totalWordCount = 0;
     let startTime = Date.now();
     function updateStats(text) {
+      if (!text) return;
       totalWordCount += text.trim().length;
       const minutes = (Date.now() - startTime) / 60000;
-      document.getElementById('stat-words').innerText = totalWordCount;
-      document.getElementById('stat-wpm').innerText = minutes > 0 ? Math.round(totalWordCount / minutes) : 0;
+      const sWords = document.getElementById('stat-words');
+      const sWpm = document.getElementById('stat-wpm');
+      if (sWords) sWords.innerText = totalWordCount;
+      if (sWpm) sWpm.innerText = minutes > 0 ? Math.round(totalWordCount / minutes) : 0;
     }
 
-    function importSheetsKeywords() {
-      const url = prompt("請貼上 Google 試算表公開發布的 CSV 網址：");
-      if (url) {
-        fetch(url).then(res => res.text()).then(data => {
-          customKeywords = data.split(/\r?\n/).flatMap(row => row.split(','));
-          alert(`成功匯入 ${customKeywords.length} 個關鍵字！`);
-        });
+    function handleKeywordUpload(event) {
+      if (typeof XLSX === 'undefined') {
+        return alert("試算表解析套件尚未載入，請稍後再試！");
       }
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          
+          customKeywords = sheetData.flat()
+            .map(cell => cell ? cell.toString().trim() : '')
+            .filter(Boolean);
+          
+          alert(`成功自檔案匯入 ${customKeywords.length} 個關鍵字！`);
+          event.target.value = '';
+        } catch (err) {
+          console.error("檔案解析失敗:", err);
+          alert(`檔案解析失敗: ${err.message}`);
+        }
+      };
+      reader.readAsArrayBuffer(file);
     }
 
     function downloadTranscript() {
@@ -226,6 +1154,8 @@
       a.download = `課堂逐字稿_${roomId}.txt`;
       a.click();
     }
+
+    window.addEventListener('DOMContentLoaded', checkKeyStatus);
   </script>
 </body>
 </html>
