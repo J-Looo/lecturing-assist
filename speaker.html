@@ -1,169 +1,28 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>講者控制台</title>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      background: #0d1117; color: #f0f6fc; padding: 15px;
-      display: flex; flex-direction: column; align-items: center;
-    }
-    
-    .trans-header {
-      width: 100%; max-width: 400px; background: #161b22; border: 1px solid #30363d;
-      border-radius: 12px; padding: 10px 15px; display: flex; align-items: center;
-      justify-content: space-between; margin-bottom: 15px;
-    }
-    select {
-      background: transparent; color: #38bdf8; border: none; font-size: 1rem;
-      font-weight: bold; outline: none; cursor: pointer;
-    }
-    .swap-btn {
-      background: #21262d; border: 1px solid #30363d; color: #8b949e;
-      width: 36px; height: 36px; border-radius: 50%; font-size: 1.2rem;
-      display: flex; align-items: center; justify-content: center; cursor: pointer;
-    }
-
-    .mic-panel {
-      width: 100%; max-width: 400px; background: #161b22; border: 1px solid #30363d;
-      border-radius: 12px; padding: 20px; display: flex; flex-direction: column; align-items: center;
-      gap: 15px; margin-bottom: 15px;
-    }
-
-    #micBtn {
-      width: 70px; height: 70px; border-radius: 50%; background: #238636; border: none;
-      color: #fff; font-size: 1.8rem; display: flex; align-items: center; justify-content: center;
-      cursor: pointer; box-shadow: 0 4px 12px rgba(35, 134, 54, 0.4);
-    }
-    #micBtn.speaking { background: #da3633; box-shadow: 0 4px 12px rgba(218, 54, 51, 0.5); }
-
-    .live-preview {
-      width: 100%; min-height: 80px; background: #0d1117; border: 1px solid #21262d;
-      border-radius: 8px; padding: 10px; font-size: 1rem; color: #e3e8f0; word-break: break-word;
-    }
-  </style>
-</head>
-<body>
-
-  <h3 style="margin-bottom: 15px;">🎤 講者控制台 (房間: <span id="room-id">----</span>)</h3>
-
-  <div class="trans-header">
-    <select id="sourceLangSelect">
-      <option value="en-US" data-name="英文">英文</option>
-      <option value="cmn-Hant-TW" data-name="中文 / 中英夾雜">中文 / 中英夾雜</option>
-      <option value="ja-JP" data-name="日文">日文</option>
-    </select>
-
-    <button class="swap-btn" onclick="swapLanguages()">⇄</button>
-
-    <select id="targetLangSelect">
-      <option value="zh-TW" data-name="繁體中文">繁體中文</option>
-      <option value="en" data-name="英文">英文</option>
-      <option value="ja" data-name="日文">日文</option>
-    </select>
-  </div>
-
-  <div class="mic-panel">
-    <button id="micBtn">🎤</button>
-    <div id="statusText" style="font-size:0.85rem; color:#8b949e;">點擊麥克風開始收音</div>
-    <div class="live-preview" id="liveText">即時辨識文字將顯示於此...</div>
-  </div>
-
-  <script>
-    const firebaseConfig = {
-      databaseURL: "https://test-speaker-cb3f5-default-rtdb.asia-southeast1.firebasedatabase.app"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const roomId = urlParams.get('room') || 'default';
-    document.getElementById('room-id').innerText = roomId;
-
-    function swapLanguages() {
-      const srcSelect = document.getElementById('sourceLangSelect');
-      const tgtSelect = document.getElementById('targetLangSelect');
+// 1. 下拉選單切換時，如果正在收音，強制重啟以套用新語言！
+    document.getElementById('sourceLangSelect').onchange = () => {
+      const newLang = document.getElementById('sourceLangSelect').value;
+      console.log("切換語音辨識語言為：", newLang);
       
-      if (srcSelect.value === 'en-US') {
-        srcSelect.value = 'cmn-Hant-TW';
-        tgtSelect.value = 'en';
-      } else {
-        srcSelect.value = 'en-US';
-        tgtSelect.value = 'zh-TW';
+      if (isListening && recognition) {
+        recognition.stop(); // 先停止
+        setTimeout(() => {
+          recognition.lang = newLang; // 指定新語言
+          try {
+            recognition.start(); // 重新啟動
+          } catch(e) {}
+        }, 300);
       }
-    }
+    };
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let recognition = null;
-    let isListening = false;
-
-    if (SpeechRecognition) {
-      recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.maxAlternatives = 1;
-
-      recognition.onstart = () => {
-        isListening = true;
-        document.getElementById('statusText').innerText = "🎤 已開始收音 (請稍停 0.2 秒後開口)";
-        document.getElementById('micBtn').classList.add('speaking');
-      };
-
-      recognition.onend = () => {
-        if (isListening) {
-          try { recognition.start(); } catch(e){}
-        } else {
-          document.getElementById('statusText').innerText = "已停止收音";
-          document.getElementById('micBtn').classList.remove('speaking');
-        }
-      };
-
-      recognition.onresult = (event) => {
-        let interimText = '';
-        let finalText = '';
-
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) finalText += event.results[i][0].transcript;
-          else interimText += event.results[i][0].transcript;
-        }
-
-        const currentText = finalText || interimText;
-        if (!currentText.trim()) return;
-
-        document.getElementById('liveText').innerText = currentText;
-
-        const srcOpt = document.getElementById('sourceLangSelect').selectedOptions[0];
-        const tgtOpt = document.getElementById('targetLangSelect').selectedOptions[0];
-
-        // 推送上雲端
-        db.ref(`rooms/${roomId}/speech_live`).set({
-          text: currentText,
-          sourceLang: srcOpt.getAttribute('data-name'),
-          targetLangName: tgtOpt.getAttribute('data-name'),
-          timestamp: Date.now()
-        });
-
-        if (finalText) {
-          db.ref(`rooms/${roomId}/speech_history`).push({
-            text: finalText,
-            timestamp: Date.now()
-          });
-        }
-      };
-    }
-
+    // 2. 麥克風按鈕點擊事件
     document.getElementById('micBtn').onclick = () => {
       if (!recognition) return alert("瀏覽器不支援語音辨識！");
       
       if (!isListening) {
-        // 先綁定語言再啟動，避免語言識別錯亂
-        recognition.lang = document.getElementById('sourceLangSelect').value;
+        // 啟動「前」強制讀取當前下拉選單的值
+        const currentSelectedLang = document.getElementById('sourceLangSelect').value;
+        recognition.lang = currentSelectedLang;
+        
         try {
           recognition.start();
         } catch(e) {
@@ -174,6 +33,3 @@
         recognition.stop();
       }
     };
-  </script>
-</body>
-</html>
