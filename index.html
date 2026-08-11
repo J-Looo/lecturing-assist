@@ -114,202 +114,118 @@
 
       <div class="trans-box" style="background: #111827;">
         <div class="box-header" style="color: #facc15;">
-          <span>🌐 即時校正與翻譯 (Gemini AI)</span>
+          <span>🌐 即時校正與翻譯</span>
           <span id="target-lang-label" style="font-size:0.8vw; color:#8b949e; margin-left:auto;">(繁體中文)</span>
         </div>
-        <div id="trans-text" class="box-content">等待產出...</div>
+        <div id="trans-text" class="box-content">等待翻譯服務串接...</div>
       </div>
     </section>
 
     <section id="summary-section">
-      <div class="summary-title">🤖 AI 即時課堂話題摘要</div>
-      <div id="summary-text">重點摘要生成中...</div>
+      <div class="summary-title">🤖 即時課堂話題摘要</div>
+      <div id="summary-text">等待摘要服務串接...</div>
     </section>
   </main>
 
   <script>
-  // 請在此處貼上你在 Google AI Studio 或 GCP 取得的 API Key
-  const GEMINI_API_KEY = "AIzaSyAakvn01yGXbY7_38upuUmvmIfs0MxzaA4";
+    const firebaseConfig = {
+      databaseURL: "https://test-speaker-cb3f5-default-rtdb.asia-southeast1.firebasedatabase.app"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
-  const firebaseConfig = {
-    databaseURL: "https://test-speaker-cb3f5-default-rtdb.asia-southeast1.firebasedatabase.app"
-  };
-  firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
+    const urlParams = new URLSearchParams(window.location.search);
+    let roomId = urlParams.get('room') || Math.floor(1000 + Math.random() * 9000).toString();
+    document.getElementById('room-display').innerText = roomId;
 
-  const urlParams = new URLSearchParams(window.location.search);
-  let roomId = urlParams.get('room') || Math.floor(1000 + Math.random() * 9000).toString();
-  document.getElementById('room-display').innerText = roomId;
+    const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
+    const qrcodeContainer = document.getElementById("qrcode");
+    qrcodeContainer.innerHTML = "";
+    new QRCode(qrcodeContainer, { text: `${baseUrl}/speaker.html?room=${roomId}`, width: 100, height: 100 });
 
-  const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
-  const qrcodeContainer = document.getElementById("qrcode");
-  qrcodeContainer.innerHTML = "";
-  new QRCode(qrcodeContainer, { text: `${baseUrl}/speaker.html?room=${roomId}`, width: 100, height: 100 });
-
-  function toggleQR() {
-    const qrBody = document.getElementById('qr-body');
-    const btn = document.getElementById('qr-toggle-btn');
-    if (qrBody.style.display === 'none') {
-      qrBody.style.display = 'block';
-      btn.innerText = '[-]';
-    } else {
-      qrBody.style.display = 'none';
-      btn.innerText = '[+]';
-    }
-  }
-
-  let customKeywords = [];
-  function applyHighlights(text) {
-    if(!text) return '';
-    let result = text;
-    customKeywords.forEach(kw => {
-      if(kw.trim()){
-        const reg = new RegExp(kw.trim(), 'gi');
-        result = result.replace(reg, match => `<span class="highlight">${match}</span>`);
+    function toggleQR() {
+      const qrBody = document.getElementById('qr-body');
+      const btn = document.getElementById('qr-toggle-btn');
+      if (qrBody.style.display === 'none') {
+        qrBody.style.display = 'block';
+        btn.innerText = '[-]';
+      } else {
+        qrBody.style.display = 'none';
+        btn.innerText = '[+]';
       }
+    }
+
+    let customKeywords = [];
+    function applyHighlights(text) {
+      if(!text) return '';
+      let result = text;
+      customKeywords.forEach(kw => {
+        if(kw.trim()){
+          const reg = new RegExp(kw.trim(), 'gi');
+          result = result.replace(reg, match => `<span class="highlight">${match}</span>`);
+        }
+      });
+      return result;
+    }
+
+    const speechBox = document.getElementById('speech-text');
+    const transBox = document.getElementById('trans-text');
+
+    // 監聽 Firebase 實時語音輸入
+    db.ref(`rooms/${roomId}/speech_live`).on('value', (snapshot) => {
+      const data = snapshot.val();
+      if (!data || !data.text) return;
+
+      speechBox.innerHTML = applyHighlights(data.text);
+
+      if (data.sourceLang) document.getElementById('source-lang-label').innerText = `(${data.sourceLang})`;
+      if (data.targetLangName) document.getElementById('target-lang-label').innerText = `(${data.targetLangName})`;
+
+      // TODO: 請 Antigravity 在此處補充翻譯功能，並將翻譯結果更新至 transBox.innerText
     });
-    return result;
-  }
 
-  const speechBox = document.getElementById('speech-text');
-  const transBox = document.getElementById('trans-text');
+    let fullTranscriptList = [];
+    const summaryBox = document.getElementById('summary-text');
 
-  let translateDebounceTimer = null;
+    // 監聽逐字稿歷史紀錄
+    db.ref(`rooms/${roomId}/speech_history`).on('child_added', (snapshot) => {
+      const data = snapshot.val();
+      if (!data || !data.text) return;
 
-  db.ref(`rooms/${roomId}/speech_live`).on('value', async (snapshot) => {
-    const data = snapshot.val();
-    if (!data || !data.text) return;
+      fullTranscriptList.push(data.text);
+      updateStats(data.text);
 
-    speechBox.innerHTML = applyHighlights(data.text);
+      // TODO: 請 Antigravity 在此處補充 AI 話題摘要功能，並更新至 summaryBox.innerText
+    });
 
-    if (data.sourceLang) document.getElementById('source-lang-label').innerText = `(${data.sourceLang})`;
-    if (data.targetLangName) document.getElementById('target-lang-label').innerText = `(${data.targetLangName})`;
-
-    const apiKey = GEMINI_API_KEY ? GEMINI_API_KEY.trim() : '';
-    if (!apiKey || apiKey.includes("你的_")) {
-      transBox.style.color = '#ef4444';
-      transBox.innerText = '❌ 請在 index.html 中填入有效的 GEMINI_API_KEY';
-      return;
+    let totalWordCount = 0;
+    let startTime = Date.now();
+    function updateStats(text) {
+      totalWordCount += text.trim().length;
+      const minutes = (Date.now() - startTime) / 60000;
+      document.getElementById('stat-words').innerText = totalWordCount;
+      document.getElementById('stat-wpm').innerText = minutes > 0 ? Math.round(totalWordCount / minutes) : 0;
     }
 
-    clearTimeout(translateDebounceTimer);
-    translateDebounceTimer = setTimeout(() => {
-      translateAndCorrectWithGemini(data.text, data.targetLangName || '繁體中文', apiKey);
-    }, 400);
-  });
-
-  let lastText = '';
-  async function translateAndCorrectWithGemini(inputText, targetLang, apiKey) {
-    if (inputText === lastText) return;
-    lastText = inputText;
-
-    const promptText = `你是一位精通語音校正的課堂翻譯員。
-輸入的文字來自語音辨識，可能存在同音字誤判或斷句錯誤。
-請先進行【語意自動校正】，然後翻譯為【${targetLang}】。
-請直接輸出翻譯結果，絕對不要加入任何解釋、引號或多餘文字。
-
-語音輸入文字："${inputText}"`;
-
-    try {
-      // 同時在 URL 與 Authorization 帶入驗證憑證，通行 GCP 服務帳戶政策
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-      
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: promptText }] }]
-        })
-      });
-
-      const resData = await response.json();
-
-      if (resData.candidates && resData.candidates[0].content && resData.candidates[0].content.parts[0].text) {
-        transBox.style.color = '#facc15';
-        transBox.innerText = resData.candidates[0].content.parts[0].text.trim();
-      } else if (resData.error) {
-        transBox.style.color = '#ef4444';
-        transBox.innerText = `❌ Gemini API 錯誤 (${resData.error.code}): ${resData.error.message}`;
+    function importSheetsKeywords() {
+      const url = prompt("請貼上 Google 試算表公開發布的 CSV 網址：");
+      if (url) {
+        fetch(url).then(res => res.text()).then(data => {
+          customKeywords = data.split(/\r?\n/).flatMap(row => row.split(','));
+          alert(`成功匯入 ${customKeywords.length} 個關鍵字！`);
+        });
       }
-    } catch (e) {
-      transBox.style.color = '#ef4444';
-      transBox.innerText = `❌ 網路/API 連線失敗: ${e.message}`;
     }
-  }
 
-  let fullTranscriptList = [];
-  const summaryBox = document.getElementById('summary-text');
-
-  db.ref(`rooms/${roomId}/speech_history`).on('child_added', (snapshot) => {
-    const data = snapshot.val();
-    if (!data || !data.text) return;
-
-    fullTranscriptList.push(data.text);
-    updateStats(data.text);
-
-    if (fullTranscriptList.length >= 2) {
-      generateAISummary();
+    function downloadTranscript() {
+      if (fullTranscriptList.length === 0) return alert("目前尚無講話紀錄！");
+      const text = `--- 課堂逐字稿 (${roomId}) ---\n\n` + fullTranscriptList.join('\n');
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `課堂逐字稿_${roomId}.txt`;
+      a.click();
     }
-  });
-
-  async function generateAISummary() {
-    const apiKey = GEMINI_API_KEY ? GEMINI_API_KEY.trim() : '';
-    if (!apiKey || apiKey.includes("你的_")) return;
-    
-    const recentContext = fullTranscriptList.slice(-10).join('\n');
-    
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: `請將以下課堂語音逐字稿整理為 2~3 個超簡短重點摘要，每點一行：\n${recentContext}` }] }]
-        })
-      });
-      const resData = await response.json();
-      if (resData.candidates && resData.candidates[0].content && resData.candidates[0].content.parts[0].text) {
-        summaryBox.innerText = resData.candidates[0].content.parts[0].text.trim();
-      }
-    } catch (e) {
-      console.error("AI 摘要失敗", e);
-    }
-  }
-
-  let totalWordCount = 0;
-  let startTime = Date.now();
-  function updateStats(text) {
-    totalWordCount += text.trim().length;
-    const minutes = (Date.now() - startTime) / 60000;
-    document.getElementById('stat-words').innerText = totalWordCount;
-    document.getElementById('stat-wpm').innerText = minutes > 0 ? Math.round(totalWordCount / minutes) : 0;
-  }
-
-  function importSheetsKeywords() {
-    const url = prompt("請貼上 Google 試算表公開發布的 CSV 網址：");
-    if (url) {
-      fetch(url).then(res => res.text()).then(data => {
-        customKeywords = data.split(/\r?\n/).flatMap(row => row.split(','));
-        alert(`成功匯入 ${customKeywords.length} 個關鍵字！`);
-      });
-    }
-  }
-
-  function downloadTranscript() {
-    if (fullTranscriptList.length === 0) return alert("目前尚無講話紀錄！");
-    const text = `--- 課堂逐字稿 (${roomId}) ---\n\n` + fullTranscriptList.join('\n');
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `課堂逐字稿_${roomId}.txt`;
-    a.click();
-  }
-</script>
+  </script>
 </body>
 </html>
