@@ -172,6 +172,14 @@
     const speechBox = document.getElementById('speech-text');
     const transBox = document.getElementById('trans-text');
 
+    // 取得清理後的 API Key
+    function getCleanApiKey() {
+      if (typeof GEMINI_API_KEY === 'undefined' || !GEMINI_API_KEY) return null;
+      return GEMINI_API_KEY.trim();
+    }
+
+    let translateDebounceTimer = null;
+
     db.ref(`rooms/${roomId}/speech_live`).on('value', async (snapshot) => {
       const data = snapshot.val();
       if (!data || !data.text) return;
@@ -181,23 +189,25 @@
       if (data.sourceLang) document.getElementById('source-lang-label').innerText = `(${data.sourceLang})`;
       if (data.targetLangName) document.getElementById('target-lang-label').innerText = `(${data.targetLangName})`;
 
-      // 檢查 API Key 狀態
-      if (typeof GEMINI_API_KEY === 'undefined' || !GEMINI_API_KEY || GEMINI_API_KEY.includes("YOUR_")) {
+      const apiKey = getCleanApiKey();
+      if (!apiKey || apiKey.includes("YOUR_")) {
         transBox.style.color = '#ef4444';
         transBox.innerText = '❌ 請在 config.js 填入有效的 GEMINI_API_KEY';
         return;
       }
 
-      // 進行 Gemini 自動語意修正 + 翻譯
-      translateAndCorrectWithGemini(data.text, data.targetLangName || '繁體中文');
+      // 使用 400ms 防抖，避免講話途中每拍一個字就大量發送 API 請求
+      clearTimeout(translateDebounceTimer);
+      translateDebounceTimer = setTimeout(() => {
+        translateAndCorrectWithGemini(data.text, data.targetLangName || '繁體中文', apiKey);
+      }, 400);
     });
 
     let lastText = '';
-    async function translateAndCorrectWithGemini(inputText, targetLang) {
+    async function translateAndCorrectWithGemini(inputText, targetLang, apiKey) {
       if (inputText === lastText) return;
       lastText = inputText;
 
-      // 採用 Prompt 語意自動修正機制，修復語音轉文字的同音誤判（如把 does 辨識錯）
       const promptText = `你是一位精通語音校正的課堂翻譯員。
 輸入的文字來自語音辨識，可能存在同音字誤判或斷句錯誤（例如將 "Does anyone" 誤判成 "Duzz anyone" 或 "Is anyone"）。
 請先進行【語意自動校正】，然後翻譯為【${targetLang}】。
@@ -206,7 +216,7 @@
 語音輸入文字："${inputText}"`;
 
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -222,7 +232,7 @@
           transBox.innerText = resData.candidates[0].content.parts[0].text.trim();
         } else if (resData.error) {
           transBox.style.color = '#ef4444';
-          transBox.innerText = `❌ Gemini API 錯誤: ${resData.error.message}`;
+          transBox.innerText = `❌ Gemini API 錯誤 (${resData.error.code}): ${resData.error.message}`;
         }
       } catch (e) {
         transBox.style.color = '#ef4444';
@@ -246,11 +256,13 @@
     });
 
     async function generateAISummary() {
-      if (typeof GEMINI_API_KEY === 'undefined' || !GEMINI_API_KEY) return;
+      const apiKey = getCleanApiKey();
+      if (!apiKey) return;
       const recentContext = fullTranscriptList.slice(-10).join('\n');
       
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+        // 統一採用 gemini-2.0-flash
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -259,7 +271,7 @@
           })
         });
         const resData = await response.json();
-        if (resData.candidates && resData.candidates[0].content.parts[0].text) {
+        if (resData.candidates && resData.candidates[0].content && resData.candidates[0].content.parts[0].text) {
           summaryBox.innerText = resData.candidates[0].content.parts[0].text.trim();
         }
       } catch (e) {
