@@ -32,13 +32,14 @@
 
     main { flex: 1; display: flex; flex-direction: column; gap: 1.2vw; margin-top: 1vw; overflow: hidden; }
 
-    #translate-container { flex: 1; display: flex; flex-direction: column; gap: 1vw; position: relative; }
+    #translate-container { flex: 1; display: flex; flex-direction: column; gap: 0; position: relative; }
 
     .trans-box {
       flex: 1; background: #161b22; border: 1px solid #30363d; border-radius: 12px;
       padding: 1.2vw 1.8vw; display: flex; flex-direction: column; position: relative;
       box-shadow: 0 4px 20px rgba(0,0,0,0.3);
       justify-content: space-between;
+      min-height: 80px;
     }
 
     .box-header {
@@ -73,11 +74,58 @@
       word-break: break-word;
     }
 
-    .swap-icon {
-      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-      background: #21262d; border: 1px solid #444c56; color: #38bdf8;
-      width: 2.8vw; height: 2.8vw; border-radius: 50%; display: flex;
-      align-items: center; justify-content: center; font-size: 1.4vw; z-index: 10;
+    /* 拖曳推桿樣式 */
+    .resizer-bar {
+      height: 12px;
+      cursor: row-resize;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      z-index: 100;
+      user-select: none;
+      margin: 4px 0;
+      background: transparent;
+      transition: background 0.2s;
+    }
+    .resizer-bar::after {
+      content: '';
+      position: absolute;
+      left: 0; right: 0;
+      height: 2px;
+      background: #30363d;
+      transition: background 0.2s;
+    }
+    .resizer-bar:hover::after, .resizer-bar.dragging::after {
+      background: #38bdf8;
+      height: 4px;
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+    }
+    .resizer-handle {
+      width: 2.4vw;
+      height: 2.4vw;
+      min-width: 28px;
+      min-height: 28px;
+      background: #21262d;
+      border: 1px solid #444c56;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #38bdf8;
+      font-size: 1.1vw;
+      font-weight: bold;
+      z-index: 101;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+      transition: all 0.2s ease;
+      cursor: row-resize;
+    }
+    .resizer-bar:hover .resizer-handle, .resizer-bar.dragging .resizer-handle {
+      background: #38bdf8;
+      color: #0d0f12;
+      border-color: #38bdf8;
+      transform: scale(1.1);
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.8);
     }
 
     #qr-card {
@@ -253,7 +301,9 @@
         <div id="qr-body"><div id="qrcode"></div></div>
       </div>
 
-      <div class="swap-icon">⇅</div>
+      <div id="resizer" class="resizer-bar">
+        <div class="resizer-handle">⇅</div>
+      </div>
 
       <div class="trans-box">
         <div class="box-header">
@@ -414,6 +464,77 @@
     let transFontSize = parseFloat(localStorage.getItem('trans_font_size')) || 3.5;
     if (speechBox) speechBox.style.fontSize = speechFontSize + 'vw';
     if (transBox) transBox.style.fontSize = transFontSize + 'vw';
+
+    // --- 雙向高度調整拖曳推桿邏輯 ---
+    let isDragging = false;
+    let topPercent = parseFloat(localStorage.getItem('splitter_percent')) || 50;
+    const translateContainer = document.getElementById('translate-container');
+    const topBox = document.querySelector('#translate-container > .trans-box');
+    const resizer = document.getElementById('resizer');
+
+    function updateDivider(percent) {
+      topPercent = Math.min(Math.max(percent, 15), 85);
+      if (topBox) {
+        topBox.style.flex = 'none';
+        topBox.style.height = `calc(${topPercent}% - 6px)`;
+      }
+      localStorage.setItem('splitter_percent', topPercent);
+    }
+
+    if (resizer) {
+      // 1. 滑鼠拖動
+      resizer.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        resizer.classList.add('dragging');
+        document.body.style.cursor = 'row-resize';
+        e.preventDefault();
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const rect = translateContainer.getBoundingClientRect();
+        const y = e.clientY - rect.top;
+        const percent = (y / rect.height) * 100;
+        updateDivider(percent);
+      });
+
+      document.addEventListener('mouseup', () => {
+        if (isDragging) {
+          isDragging = false;
+          resizer.classList.remove('dragging');
+          document.body.style.cursor = '';
+        }
+      });
+
+      // 2. 觸控拖動 (支援手機與觸控螢幕)
+      resizer.addEventListener('touchstart', (e) => {
+        isDragging = true;
+        resizer.classList.add('dragging');
+      });
+
+      document.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        const rect = translateContainer.getBoundingClientRect();
+        const touch = e.touches[0];
+        const y = touch.clientY - rect.top;
+        const percent = (y / rect.height) * 100;
+        updateDivider(percent);
+      }, { passive: false });
+
+      document.addEventListener('touchend', () => {
+        if (isDragging) {
+          isDragging = false;
+          resizer.classList.remove('dragging');
+        }
+      });
+
+      // 3. 滾輪滾動縮放
+      resizer.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 2 : -2;
+        updateDivider(topPercent + delta);
+      }, { passive: false });
+    }
 
     // 字型大小調整函數
     function adjustFontSize(elementId, delta) {
@@ -730,8 +851,14 @@
       a.click();
     }
 
-    // 初始化檢查金鑰狀態
-    window.addEventListener('DOMContentLoaded', checkKeyStatus);
+    // 初始化檢查金鑰狀態與推桿比例
+    window.addEventListener('DOMContentLoaded', () => {
+      checkKeyStatus();
+      if (typeof updateDivider === 'function') {
+        const savedPercent = parseFloat(localStorage.getItem('splitter_percent')) || 50;
+        updateDivider(savedPercent);
+      }
+    });
   </script>
 </body>
 </html>
