@@ -315,8 +315,15 @@
       return l;
     }
 
+    // 預設 Gemini API 金鑰（留空，由使用者點擊右上角手動設定）
+    const DEFAULT_GEMINI_KEY = "";
+
+    function getGeminiKey() {
+      return localStorage.getItem('gemini_api_key') || DEFAULT_GEMINI_KEY;
+    }
+
     function checkKeyStatus() {
-      const key = localStorage.getItem('gemini_api_key');
+      const key = getGeminiKey();
       
       // 翻譯功能目前使用 Google 翻譯網頁版免金鑰 API，不需要金鑰提示
       if (transBox.innerText === '等待翻譯服務串接...' || transBox.innerText.includes('請點擊右上角')) {
@@ -328,7 +335,7 @@
           summaryBox.innerHTML = '<span style="color:#8b949e; font-size:1.4vw;">請點擊右上角「⚙️ 設定 Gemini 金鑰」以啟動話題摘要</span>';
         }
       } else {
-        if (summaryBox.innerText.includes('請點擊右上角')) {
+        if (summaryBox.innerText === '等待摘要服務串接...' || summaryBox.innerText.includes('請點擊右上角')) {
           summaryBox.innerText = '等待語音輸入以產生話題摘要...';
         }
       }
@@ -393,7 +400,7 @@
 
     // 呼叫 Gemini API 產生課堂摘要
     async function generateSummary() {
-      const apiKey = localStorage.getItem('gemini_api_key');
+      const apiKey = getGeminiKey();
       if (!apiKey) return;
       if (fullTranscriptList.length === 0) return;
 
@@ -490,7 +497,7 @@ ${transcriptText}`
       updateStats(data.text);
 
       // 觸發 AI 話題摘要功能
-      const key = localStorage.getItem('gemini_api_key');
+      const key = getGeminiKey();
       if (key) {
         debouncedGenerateSummary();
       } else {
