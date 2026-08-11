@@ -6,6 +6,7 @@
   <title>講者控制台</title>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <script src="https://js.puter.com/v2/"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -45,6 +46,13 @@
       transition: all 0.2s ease;
     }
     #micBtn.speaking { background: #da3633; box-shadow: 0 4px 12px rgba(218, 54, 51, 0.5); }
+    #micBtn.processing { background: #facc15; box-shadow: 0 4px 12px rgba(250, 204, 21, 0.5); animation: pulse 1.5s infinite; }
+    
+    @keyframes pulse {
+      0% { opacity: 0.6; }
+      50% { opacity: 1; }
+      100% { opacity: 0.6; }
+    }
 
     .live-preview {
       width: 100%; min-height: 80px; background: #0d1117; border: 1px solid #21262d;
@@ -73,6 +81,17 @@
     </select>
   </div>
 
+  <!-- 辨識模式切換 -->
+  <div class="trans-header" style="margin-bottom: 15px; justify-content: space-around;">
+    <span style="font-size: 0.9rem; font-weight: bold; color: #8b949e;">辨識模式：</span>
+    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.95rem; font-weight: 600; color: #38bdf8;">
+      <input type="radio" name="recognitionMode" value="standard" checked onclick="switchMode('standard')"> 標準 (內建)
+    </label>
+    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.95rem; font-weight: 600; color: #facc15;">
+      <input type="radio" name="recognitionMode" value="whisper" onclick="switchMode('whisper')"> AI 高精準 (Whisper)
+    </label>
+  </div>
+
   <!-- 2. 收音按鈕與即時文字顯示卡片 -->
   <div class="mic-panel">
     <button id="micBtn">🎤</button>
@@ -99,6 +118,21 @@
     let isListening = false;
     let isChangingLang = false; // 關鍵：防止切換語言時 onend 與 setTimeout 衝突的保護旗標
 
+    // Whisper 辨識相關變數
+    let currentMode = 'standard'; // 'standard' or 'whisper'
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let audioContext = null;
+    let analyser = null;
+    let microphoneNode = null;
+    let javascriptNode = null;
+    let audioStream = null;
+
+    let isWhisperListening = false;
+    let silenceTimer = null;
+    const SILENCE_THRESHOLD = 15; // 音量平均值小於此值判定為靜音
+    const SILENCE_DURATION = 1200; // 靜音持續 1.2 秒則自動斷句並送出
+
     // 3. 語言切換對調邏輯
     function swapLanguages() {
       const srcSelect = document.getElementById('sourceLangSelect');
@@ -115,7 +149,7 @@
       
       syncLanguageToFirebase();
 
-      if (isListening && recognition) {
+      if (currentMode === 'standard' && isListening && recognition) {
         restartRecognition();
       }
     }
@@ -131,7 +165,30 @@
       });
     }
 
-    // 5. 語音辨識初始化
+    // 5. 模式切換邏輯
+    function switchMode(mode) {
+      if (currentMode === mode) return;
+
+      // 停止目前運行的辨識/錄音
+      if (isListening && recognition) {
+        isListening = false;
+        recognition.stop();
+      }
+      if (isWhisperListening) {
+        stopWhisper();
+      }
+
+      currentMode = mode;
+
+      // 重設 UI 與狀態
+      const micBtn = document.getElementById('micBtn');
+      micBtn.className = '';
+      micBtn.innerText = '🎤';
+      document.getElementById('liveText').innerText = '即時辨識文字將顯示於此...';
+      document.getElementById('statusText').innerText = mode === 'standard' ? '點擊麥克風開始收音' : '點擊麥克風開始 AI 語意收音';
+    }
+
+    // 6. 語音辨識 (Web Speech API) 初始化
     if (SpeechRecognition) {
       recognition = new SpeechRecognition();
       recognition.continuous = true;
@@ -222,10 +279,200 @@
       }, 350); // 給予 350ms 確保瀏覽器引擎完全釋放
     }
 
-    // 監聽選單切換
+    // 7. Whisper 收音控制邏輯
+    async function startWhisper() {
+      try {
+        // 請求麥克風權限
+        audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        // 初始化 AudioContext 作為 VAD 音量偵測
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        microphoneNode = audioContext.createMediaStreamSource(audioStream);
+        javascriptNode = audioContext.createScriptProcessor(2048, 1, 1);
+        
+        analyser.smoothingTimeConstant = 0.8;
+        analyser.fftSize = 1024;
+        
+        microphoneNode.connect(analyser);
+        analyser.connect(javascriptNode);
+        javascriptNode.connect(audioContext.destination);
+        
+        isWhisperListening = true;
+        document.getElementById('statusText').innerText = "🎤 Whisper 聆聽中...請說話";
+        const micBtn = document.getElementById('micBtn');
+        micBtn.classList.add('speaking');
+        micBtn.innerText = '⏺️';
+        document.getElementById('liveText').innerText = '正在偵測您的聲音...';
+        
+        // 開始第一個音訊切片的錄製
+        startNewAudioChunk();
+        
+        // 偵測音量
+        javascriptNode.onaudioprocess = () => {
+          if (!isWhisperListening) return;
+          const array = new Uint8Array(analyser.frequencyBinCount);
+          analyser.getByteFrequencyData(array);
+          let values = 0;
+          const length = array.length;
+          for (let i = 0; i < length; i++) {
+            values += array[i];
+          }
+          const average = values / length;
+          
+          // 如果音量低於門檻，啟動靜音計時器
+          if (average < SILENCE_THRESHOLD) {
+            if (!silenceTimer) {
+              silenceTimer = setTimeout(() => {
+                triggerWhisperTranscription();
+              }, SILENCE_DURATION);
+            }
+          } else {
+            // 偵測到有聲音，清除計時器
+            if (silenceTimer) {
+              clearTimeout(silenceTimer);
+              silenceTimer = null;
+            }
+            document.getElementById('statusText').innerText = "🎤 Whisper 偵測到說話中...";
+          }
+        };
+        
+      } catch (err) {
+        console.error("無法啟動麥克風錄音:", err);
+        alert("無法開啟麥克風，請確認權限與連線！\n錯誤: " + err.message);
+        stopWhisper();
+      }
+    }
+
+    function startNewAudioChunk() {
+      if (!audioStream) return;
+      audioChunks = [];
+      mediaRecorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunks.push(event.data);
+        }
+      };
+      
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        if (audioBlob.size > 1000 && isWhisperListening) {
+          sendToWhisper(audioBlob);
+        }
+      };
+      
+      mediaRecorder.start();
+    }
+
+    function triggerWhisperTranscription() {
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        document.getElementById('statusText').innerText = "⏳ AI 正在辨識此段落...";
+        mediaRecorder.stop(); // 停止目前錄音（會觸發 onstop 發送音檔）
+        
+        // 立刻重啟下一個錄音切片以保持連續收音
+        if (isWhisperListening) {
+          startNewAudioChunk();
+        }
+      }
+    }
+
+    async function sendToWhisper(audioBlob) {
+      const micBtn = document.getElementById('micBtn');
+      micBtn.classList.remove('speaking');
+      micBtn.classList.add('processing');
+      micBtn.innerText = '⏳';
+
+      try {
+        if (typeof puter === 'undefined') {
+          throw new Error('Puter SDK 未載入，請確認網路連線');
+        }
+
+        // 轉換為 File 對象以供 Puter.js 接受
+        const audioFile = new File([audioBlob], 'speech.webm', { type: 'audio/webm' });
+        
+        // 呼叫 Puter.js 免金鑰 AI 辨識 API
+        const text = await puter.ai.speech2txt(audioFile);
+
+        if (text && text.trim()) {
+          const resultText = text.trim();
+          console.log("Whisper 辨識成果:", resultText);
+          
+          document.getElementById('liveText').innerText = resultText;
+          
+          const srcOpt = document.getElementById('sourceLangSelect').selectedOptions[0];
+          const tgtOpt = document.getElementById('targetLangSelect').selectedOptions[0];
+          
+          // 1. 即時推送雲端 (給翻譯用)
+          db.ref(`rooms/${roomId}/speech_live`).set({
+            text: resultText,
+            sourceLang: srcOpt ? srcOpt.getAttribute('data-name') : '',
+            targetLangName: tgtOpt ? tgtOpt.getAttribute('data-name') : '',
+            timestamp: Date.now()
+          });
+
+          // 2. 推送歷史紀錄 (給摘要用)
+          db.ref(`rooms/${roomId}/speech_history`).push({
+            text: resultText,
+            timestamp: Date.now()
+          });
+        }
+      } catch (err) {
+        console.error("Whisper 轉譯失敗:", err);
+        document.getElementById('liveText').innerText = "AI 辨識失敗: " + err.message;
+      } finally {
+        if (isWhisperListening) {
+          micBtn.className = 'speaking';
+          micBtn.innerText = '⏺️';
+          document.getElementById('statusText').innerText = "🎤 Whisper 聆聽中...請說話";
+        } else {
+          micBtn.className = '';
+          micBtn.innerText = '🎤';
+          document.getElementById('statusText').innerText = "已停止收音";
+        }
+      }
+    }
+
+    function stopWhisper() {
+      isWhisperListening = false;
+      if (silenceTimer) {
+        clearTimeout(silenceTimer);
+        silenceTimer = null;
+      }
+
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+      }
+
+      // 關閉設備與音訊上下文
+      if (audioStream) {
+        audioStream.getTracks().forEach(track => track.stop());
+        audioStream = null;
+      }
+
+      if (javascriptNode) {
+        javascriptNode.disconnect();
+        javascriptNode = null;
+      }
+      if (microphoneNode) {
+        microphoneNode.disconnect();
+        microphoneNode = null;
+      }
+      if (audioContext) {
+        audioContext.close();
+        audioContext = null;
+      }
+
+      document.getElementById('statusText').innerText = "已停止收音";
+      const micBtn = document.getElementById('micBtn');
+      micBtn.className = '';
+      micBtn.innerText = '🎤';
+    }
+
+    // 8. 監聽選單與按鈕事件
     document.getElementById('sourceLangSelect').onchange = () => {
       syncLanguageToFirebase();
-      if (isListening) {
+      if (currentMode === 'standard' && isListening) {
         restartRecognition();
       }
     };
@@ -234,23 +481,29 @@
       syncLanguageToFirebase();
     };
 
-    // 麥克風按鈕點擊控制
+    // 麥克風按鈕按鍵派發
     document.getElementById('micBtn').onclick = () => {
-      if (!recognition) return alert("您的手機瀏覽器不支援語音辨識！");
-      
-      if (!isListening) {
-        // 啟動前正確設定語言與同步狀態
-        recognition.lang = document.getElementById('sourceLangSelect').value;
-        syncLanguageToFirebase();
+      if (currentMode === 'standard') {
+        if (!recognition) return alert("您的手機瀏覽器不支援語音辨識！");
         
-        try {
-          recognition.start();
-        } catch(e) {
-          console.error("啟動失敗", e);
+        if (!isListening) {
+          recognition.lang = document.getElementById('sourceLangSelect').value;
+          syncLanguageToFirebase();
+          try {
+            recognition.start();
+          } catch(e) {
+            console.error("啟動失敗", e);
+          }
+        } else {
+          isListening = false;
+          recognition.stop();
         }
       } else {
-        isListening = false;
-        recognition.stop();
+        if (!isWhisperListening) {
+          startWhisper();
+        } else {
+          stopWhisper();
+        }
       }
     };
   </script>
