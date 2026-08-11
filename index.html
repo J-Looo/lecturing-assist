@@ -13,28 +13,16 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background-color: #0d0f12;
-      color: #e3e8f0;
+      background-color: #0d0f12; color: #e3e8f0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang TC", "Microsoft JhengHei", sans-serif;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      padding: 1.2vw;
-      justify-content: space-between;
-      overflow: hidden;
+      height: 100vh; display: flex; flex-direction: column; padding: 1.2vw;
+      justify-content: space-between; overflow: hidden;
     }
 
-    /* 頂部功能條 */
     header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: #161b22;
-      border: 1px solid #30363d;
-      padding: 0.6vw 1.2vw;
-      border-radius: 8px;
-      font-size: 0.85vw;
-      color: #8b949e;
+      display: flex; justify-content: space-between; align-items: center;
+      background: #161b22; border: 1px solid #30363d; padding: 0.6vw 1.2vw;
+      border-radius: 8px; font-size: 0.85vw; color: #8b949e;
     }
     .stats-val { color: #38bdf8; font-weight: bold; }
     .btn {
@@ -43,113 +31,50 @@
     }
     .btn:hover { background: #30363d; color: #fff; }
 
-    main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 1.2vw;
-      margin-top: 1vw;
-      overflow: hidden;
-    }
+    main { flex: 1; display: flex; flex-direction: column; gap: 1.2vw; margin-top: 1vw; overflow: hidden; }
 
-    /* 上半部：Google 翻譯風格左右對照雙欄 */
-    #translate-container {
-      flex: 1.3;
-      display: flex;
-      gap: 1vw;
-      position: relative;
-    }
+    #translate-container { flex: 1.3; display: flex; gap: 1vw; position: relative; }
 
     .trans-box {
-      flex: 1;
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 12px;
-      padding: 1.8vw;
-      display: flex;
-      flex-direction: column;
-      position: relative;
+      flex: 1; background: #161b22; border: 1px solid #30363d; border-radius: 12px;
+      padding: 1.8vw; display: flex; flex-direction: column; position: relative;
       box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     }
 
     .box-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 1.1vw;
-      font-weight: 600;
-      color: #38bdf8;
-      margin-bottom: 1vw;
-      border-bottom: 1px solid #21262d;
-      padding-bottom: 0.5vw;
+      display: flex; align-items: center; gap: 8px; font-size: 1.1vw;
+      font-weight: 600; color: #38bdf8; margin-bottom: 1vw;
+      border-bottom: 1px solid #21262d; padding-bottom: 0.5vw;
     }
 
     .box-content {
-      font-size: 3.5vw;
-      font-weight: 700;
-      line-height: 1.25;
-      word-break: break-word;
-      flex: 1;
-      display: flex;
-      align-items: center;
+      font-size: 3.5vw; font-weight: 700; line-height: 1.25;
+      word-break: break-word; flex: 1; display: flex; align-items: center;
     }
 
     #speech-text { color: #ffffff; text-shadow: 0 0 15px rgba(255,255,255,0.1); }
     #trans-text { color: #facc15; }
 
-    /* 中間切換圖示裝飾 */
     .swap-icon {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      background: #21262d;
-      border: 1px solid #444c56;
-      color: #38bdf8;
-      width: 2.8vw;
-      height: 2.8vw;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.4vw;
-      z-index: 10;
-      box-shadow: 0 0 12px rgba(0,0,0,0.5);
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      background: #21262d; border: 1px solid #444c56; color: #38bdf8;
+      width: 2.8vw; height: 2.8vw; border-radius: 50%; display: flex;
+      align-items: center; justify-content: center; font-size: 1.4vw; z-index: 10;
     }
 
-    /* 右上角 QR Code 浮動視窗 */
     #qr-card {
-      position: absolute;
-      top: 1vw;
-      right: 1vw;
-      background: #161b22;
-      border: 1px solid #444c56;
-      border-radius: 8px;
-      padding: 8px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      z-index: 50;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+      position: absolute; top: 1vw; right: 1vw; background: #161b22;
+      border: 1px solid #444c56; border-radius: 8px; padding: 8px;
+      display: flex; flex-direction: column; align-items: center; z-index: 50;
     }
-    .qr-card-header {
-      width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;
-    }
-    #qr-toggle-btn {
-      background: #21262d; border: 1px solid #30363d; color: #c9d1d9; border-radius: 3px; cursor: pointer; padding: 1px 5px; font-size: 0.7vw;
-    }
+    .qr-card-header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    #qr-toggle-btn { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; border-radius: 3px; cursor: pointer; padding: 1px 5px; font-size: 0.7vw; }
     #qr-body { background: #fff; padding: 4px; border-radius: 4px; }
 
-    /* 下半部：課堂摘要區 */
     #summary-section {
-      flex: 0.7;
-      background: #082f49;
-      border: 1px solid #0284c7;
-      border-radius: 12px;
-      padding: 1.2vw 1.8vw;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
+      flex: 0.7; background: #082f49; border: 1px solid #0284c7;
+      border-radius: 12px; padding: 1.2vw 1.8vw; display: flex;
+      flex-direction: column; justify-content: center;
     }
 
     .summary-title { font-size: 1vw; color: #7dd3fc; margin-bottom: 0.4vw; font-weight: 600; }
@@ -169,10 +94,7 @@
   </header>
 
   <main>
-    <!-- 1. Google 翻譯風格左右雙欄 -->
     <section id="translate-container">
-      
-      <!-- QR Code 浮動視窗 -->
       <div id="qr-card">
         <div class="qr-card-header">
           <span style="font-size:0.7vw; color:#8b949e;">手機掃碼</span>
@@ -181,30 +103,25 @@
         <div id="qr-body"><div id="qrcode"></div></div>
       </div>
 
-      <!-- 中間雙向對調圖示 -->
       <div class="swap-icon">⇄</div>
 
-      <!-- 左欄：語音輸入 -->
       <div class="trans-box">
         <div class="box-header">
           <span>🎤 語音輸入</span>
-          <span id="source-lang-label" style="font-size:0.8vw; color:#8b949e; margin-left:auto;">(中文 / 中英夾雜)</span>
+          <span id="source-lang-label" style="font-size:0.8vw; color:#8b949e; margin-left:auto;">(英文)</span>
         </div>
         <div id="speech-text" class="box-content">等待語音連線與輸入...</div>
       </div>
 
-      <!-- 右欄：Gemini 即時翻譯 -->
       <div class="trans-box" style="background: #111827;">
         <div class="box-header" style="color: #facc15;">
           <span>🌐 即時翻譯 (Gemini AI)</span>
-          <span id="target-lang-label" style="font-size:0.8vw; color:#8b949e; margin-left:auto;">(英文)</span>
+          <span id="target-lang-label" style="font-size:0.8vw; color:#8b949e; margin-left:auto;">(繁體中文)</span>
         </div>
         <div id="trans-text" class="box-content">等待翻譯產出...</div>
       </div>
-
     </section>
 
-    <!-- 2. 下半部：課堂摘要區 -->
     <section id="summary-section">
       <div class="summary-title">🤖 AI 即時課堂話題摘要</div>
       <div id="summary-text">重點摘要生成中，將自動擷取課堂精華...</div>
@@ -222,7 +139,6 @@
     let roomId = urlParams.get('room') || Math.floor(1000 + Math.random() * 9000).toString();
     document.getElementById('room-display').innerText = roomId;
 
-    // QRCode 生成
     const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
     const qrcodeContainer = document.getElementById("qrcode");
     qrcodeContainer.innerHTML = "";
@@ -256,22 +172,24 @@
     const speechBox = document.getElementById('speech-text');
     const transBox = document.getElementById('trans-text');
 
-    // 監聽手機端發送的語音與語言設定
     db.ref(`rooms/${roomId}/speech_live`).on('value', async (snapshot) => {
       const data = snapshot.val();
       if (!data || !data.text) return;
 
       speechBox.innerHTML = applyHighlights(data.text);
 
-      // 更新語言標籤名稱
       if (data.sourceLang) document.getElementById('source-lang-label').innerText = `(${data.sourceLang})`;
       if (data.targetLangName) document.getElementById('target-lang-label').innerText = `(${data.targetLangName})`;
 
-      if (data.needTranslate && typeof GEMINI_API_KEY !== 'undefined' && GEMINI_API_KEY) {
-        translateWithGemini(data.text, data.targetLangName || '英文');
-      } else if (!data.needTranslate) {
-        transBox.innerText = '（翻譯已關閉）';
+      // 檢查 Gemini API Key 是否存在
+      if (typeof GEMINI_API_KEY === 'undefined' || !GEMINI_API_KEY) {
+        transBox.style.color = '#ef4444';
+        transBox.innerText = '❌ 未偵測到 GEMINI_API_KEY，請確認 config.js';
+        return;
       }
+
+      // 無論 needTranslate 為何，預設只要有文字輸入就進行即時翻譯
+      translateWithGemini(data.text, data.targetLangName || '繁體中文');
     });
 
     let lastTranslatedText = '';
@@ -284,14 +202,23 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: `你是一位專業課堂翻譯員。請將以下句子翻譯為${targetLangName}，只需輸出翻譯結果：\n"${text}"` }] }]
+            contents: [{ parts: [{ text: `你是一位專業課堂翻譯員。請將以下句子翻譯為${targetLangName}，只需輸出翻譯結果，絕不要包含任何解釋：\n"${text}"` }] }]
           })
         });
+        
         const resData = await response.json();
-        if (resData.candidates && resData.candidates[0].content.parts[0].text) {
+        
+        if (resData.candidates && resData.candidates[0].content && resData.candidates[0].content.parts[0].text) {
+          transBox.style.color = '#facc15';
           transBox.innerText = resData.candidates[0].content.parts[0].text.trim();
+        } else if (resData.error) {
+          transBox.style.color = '#ef4444';
+          transBox.innerText = `❌ API 錯誤: ${resData.error.message}`;
         }
-      } catch(e) { console.error("Gemini 翻譯失敗", e); }
+      } catch(e) {
+        transBox.style.color = '#ef4444';
+        transBox.innerText = `❌ 連線失敗: ${e.message}`;
+      }
     }
 
     let fullTranscriptList = [];
@@ -304,7 +231,8 @@
       fullTranscriptList.push(data.text);
       updateStats(data.text);
 
-      if (fullTranscriptList.length % 3 === 0) {
+      // 只要累積 2 句話就觸發一次摘要
+      if (fullTranscriptList.length >= 2) {
         generateAISummary();
       }
     });
@@ -325,7 +253,9 @@
         if (resData.candidates && resData.candidates[0].content.parts[0].text) {
           summaryBox.innerText = resData.candidates[0].content.parts[0].text.trim();
         }
-      } catch (e) { console.error("AI 摘要生成失敗", e); }
+      } catch (e) {
+        console.error("AI 摘要生成失敗", e);
+      }
     }
 
     let totalWordCount = 0;
