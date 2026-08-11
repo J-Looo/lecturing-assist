@@ -435,6 +435,8 @@
   </div>
 
   <script>
+    // 儲存 AI 語音問答的對話歷史
+let aiConversationHistory = [];
     // 強制掛載至全域 window 物件，防止 Scope 區域變數與名稱大小寫錯位問題
 window.speakQnAReply = function(text) {
   if (!('speechSynthesis' in window)) return;
@@ -442,11 +444,36 @@ window.speakQnAReply = function(text) {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'zh-TW';
+
+    // 取得瀏覽器所有可用語音
+    const voices = window.speechSynthesis.getVoices();
+
+    // 優先尋找 Microsoft Natural / Natural 神經網路高質感語音 (如 Copilot 常用語音)
+    const preferredVoice = voices.find(v => 
+      (v.lang === 'zh-TW' || v.lang === 'zh_TW' || v.lang.includes('zh')) &&
+      (v.name.includes('Natural') || v.name.includes('HsiaoChen') || v.name.includes('YunJhe') || v.name.includes('Google') || v.name.includes('Online'))
+    ) || voices.find(v => v.lang.includes('zh'));
+
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+    }
+
+    // 微調語調與語速，讓聽感更自然
+    utterance.rate = 0.95; // 稍微放慢語速，適合課堂收聽
+    utterance.pitch = 1.0;
+
     window.speechSynthesis.speak(utterance);
   } catch (e) {
     console.error("語音發音朗讀失敗:", e);
   }
 };
+
+// 確保語音清單載入完畢 (針對 Chrome/Edge 異步載入 voices 的修復)
+if ('speechSynthesis' in window) {
+  window.speechSynthesis.onvoiceschanged = () => {
+    window.speechSynthesis.getVoices();
+  };
+}
     // --- 題目切換與初始化邏輯 ---
     function toggleTheme() {
       const body = document.body;
@@ -627,20 +654,25 @@ function speakQnAReply(text) {
   }
 }
 
-// 2. Groq AI 請求函數
 async function askGroqAI(question, apiKey) {
   const url = "https://api.groq.com/openai/v1/chat/completions";
+
+  // 將最新問題加入歷史紀錄
+  aiConversationHistory.push({ role: "user", content: question });
+
+  // 只保留近 10 輪對話，避免請求太大
+  if (aiConversationHistory.length > 20) {
+    aiConversationHistory = aiConversationHistory.slice(-20);
+  }
+
   const payload = {
     model: "llama-3.3-70b-versatile",
     messages: [
       {
         role: "system",
-        content: "你是一個國中小課堂助教 AI。請使用簡短、清晰、生動有趣、適合學生的繁體中文來回答老師的問題。字數限制在 120 字以內，非常適合投影在教室大螢幕上供學生全班閱讀。"
+        content: "你是一個國中小課堂助教 AI。請使用簡短、清晰、生動有趣、適合學生的繁體中文來回答老師的問題。字數限制在 120 字以內，非常適合投影在教室大螢幕上供學生全班閱讀。請根據過往的對話上下文繼續回答。"
       },
-      {
-        role: "user",
-        content: question
-      }
+      ...aiConversationHistory // 自動帶入歷史對話紀錄
     ],
     max_tokens: 250,
     temperature: 0.7
@@ -657,34 +689,20 @@ async function askGroqAI(question, apiKey) {
     });
 
     if (!response.ok) {
-      if (response.status === 404 || response.status === 400) {
-        payload.model = "llama-3.1-8b-instant";
-        const retryResponse = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${apiKey}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(payload)
-        });
-
-        if (retryResponse.ok) {
-          const retryData = await retryResponse.json();
-          return retryData.choices[0].message.content.trim();
-        }
-        
-        const errJson = await retryResponse.json().catch(() => ({}));
-        throw new Error(`Groq API 錯誤 (${retryResponse.status}): ${errJson.error?.message || 'Bad Request'}`);
-      }
-
       const errJson = await response.json().catch(() => ({}));
-      throw new Error(`Groq API 錯誤 (${response.status}): ${errJson.error?.message || '請求格式無效'}`);
+      throw new Error(`Groq API 錯誤 (${response.status}): ${errJson.error?.message || '請求無效'}`);
     }
 
     const data = await response.json();
-    return data.choices[0].message.content.trim();
+    const aiAnswer = data.choices[0].message.content.trim();
 
+    // 將 AI 的回答也存入對話歷史
+    aiConversationHistory.push({ role: "assistant", content: aiAnswer });
+
+    return aiAnswer;
   } catch (err) {
+    // 發生錯誤時移除剛剛失敗的問題，避免影響後續對話
+    aiConversationHistory.pop();
     console.error("Groq API Call Failed:", err);
     throw err;
   }
