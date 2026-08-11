@@ -19,23 +19,29 @@
       border-radius: 10px; padding: 15px; margin-bottom: 15px;
     }
     .setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-    select, button {
-      padding: 10px; border-radius: 6px; border: 1px solid #30363d; background: #21262d; color: #fff;
+    select {
+      padding: 8px; border-radius: 6px; border: 1px solid #30363d; background: #21262d; color: #fff;
     }
     #toggleBtn {
       width: 100%; padding: 18px; font-size: 1.2rem; font-weight: bold; border-radius: 12px;
-      background: #238636; color: #fff; border: none; cursor: pointer;
+      background: #238636; color: #fff; border: none; cursor: pointer; margin-bottom: 15px;
     }
     #toggleBtn.speaking { background: #da3633; }
+    
+    /* 手機端即時除錯視窗 */
+    #debug-log {
+      width: 100%; max-width: 400px; height: 120px; background: #000; color: #38bdf8;
+      border: 1px solid #30363d; border-radius: 8px; padding: 10px; font-family: monospace;
+      font-size: 0.75rem; overflow-y: auto; white-space: pre-wrap;
+    }
   </style>
 </head>
 <body>
 
-  <h2>🎤 講者控制台</h2>
+  <h2 style="margin-bottom:5px;">🎤 講者控制台</h2>
   <div style="color:#58a6ff; margin-bottom:15px;">房間頻道：<span id="room-id">----</span></div>
 
   <div class="panel">
-    <!-- 語言與翻譯設定 (需求 5, 6) -->
     <div class="setting-row">
       <label>識別語言：</label>
       <select id="langSelect">
@@ -58,19 +64,37 @@
     </div>
   </div>
 
-  <button id="toggleBtn">開啟強化降噪收音</button>
-  <p id="status" style="margin-top:10px; font-size:0.85rem; color:#8b949e;">狀態：待命</p>
+  <button id="toggleBtn">開啟麥克風收音</button>
+
+  <!-- 除錯訊息面板 -->
+  <div id="debug-log">Log: 頁面已載入，等待操作...</div>
 
   <script>
+    // 簡單日誌紀錄函數
+    function log(msg) {
+      const logBox = document.getElementById('debug-log');
+      logBox.innerText += `\n[${new Date().toLocaleTimeString()}] ${msg}`;
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    // 1. 初始化 Firebase (請確認這個 URL 是否為你的真實資料庫網址)
     const firebaseConfig = {
       databaseURL: "https://test-speaker-cb3f5-default-rtdb.asia-southeast1.firebasedatabase.app"
     };
-    firebase.initializeApp(firebaseConfig);
+    
+    try {
+      firebase.initializeApp(firebaseConfig);
+      log("Firebase 初始化成功！");
+    } catch(e) {
+      log("Firebase 初始化失敗: " + e.message);
+    }
     const db = firebase.database();
 
+    // 2. 解析房間號碼
     const urlParams = new URLSearchParams(window.location.search);
     const roomId = urlParams.get('room') || 'default';
     document.getElementById('room-id').innerText = roomId;
+    log("當前房間號碼：" + roomId);
 
     const translateToggle = document.getElementById('translateToggle');
     const transTargetRow = document.getElementById('transTargetRow');
@@ -78,43 +102,36 @@
       transTargetRow.style.display = translateToggle.checked ? 'flex' : 'none';
     };
 
-    // 10. 麥克風音訊降噪強化設定 (Noise Suppression & Echo Cancellation)
-    async function getEnhancedAudioStream() {
-      try {
-        return await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true, // 回聲消除
-            noiseSuppression: true, // 自動雜訊抑制 (過濾學生吵雜聲)
-            autoGainControl: true   // 自動增益控制
-          }
-        });
-      } catch (e) {
-        console.warn("無法存取降噪麥克風，降級為標準收音", e);
-        return null;
-      }
-    }
-
+    // 3. 語音辨識邏輯 (採用最相容手機端的寫法)
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
     let isListening = false;
 
-    if (SpeechRecognition) {
+    if (!SpeechRecognition) {
+      log("❌ 警告：此手機瀏覽器不支援語音辨識！(請改用 Safari 或 Chrome)");
+    } else {
       recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
 
       recognition.onstart = () => {
         isListening = true;
-        document.getElementById('status').innerText = "狀態：收音中 (已啟用硬體降噪)";
+        log("🎤 麥克風已啟動，請開始說話...");
         document.getElementById('toggleBtn').innerText = "停止收音";
         document.getElementById('toggleBtn').classList.add('speaking');
       };
 
+      recognition.onerror = (event) => {
+        log("❌ 語音辨識錯誤: " + event.error);
+      };
+
       recognition.onend = () => {
-        if (isListening) recognition.start();
-        else {
-          document.getElementById('status').innerText = "狀態：已停止";
-          document.getElementById('toggleBtn').innerText = "開啟強化降噪收音";
+        log("麥克風連線斷開...");
+        if (isListening) {
+          log("嘗試自動重新連線...");
+          try { recognition.start(); } catch(e) {}
+        } else {
+          document.getElementById('toggleBtn').innerText = "開啟麥克風收音";
           document.getElementById('toggleBtn').classList.remove('speaking');
         }
       };
@@ -129,23 +146,29 @@
         }
 
         const currentText = finalText || interimText;
-        let translatedText = '';
+        if (!currentText.trim()) return;
 
-        // 6. 即時翻譯 (利用免費 MyMemory API 進行翻譯)
-        if (translateToggle.checked && currentText.trim()) {
+        log("辨識文字: " + currentText);
+
+        let translatedText = '';
+        if (translateToggle.checked) {
           const target = document.getElementById('targetLangSelect').value;
           try {
             const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(currentText)}&langpair=autodetect|${target}`);
             const resData = await res.json();
             translatedText = resData.responseData.translatedText;
-          } catch(e) { console.error("翻譯失敗", e); }
+          } catch(e) { log("翻譯失敗: " + e.message); }
         }
 
-        // 推送至 Firebase
+        // 送出至 Firebase
         db.ref(`rooms/${roomId}/speech_live`).set({
           text: currentText,
           translatedText: translatedText,
           timestamp: Date.now()
+        }).then(() => {
+          log("已成功發送至雲端！");
+        }).catch(err => {
+          log("❌ Firebase 寫入失敗: " + err.message);
         });
 
         if (finalText) {
@@ -157,14 +180,21 @@
       };
     }
 
-    document.getElementById('toggleBtn').onclick = async () => {
+    // 按鈕點擊事件
+    document.getElementById('toggleBtn').onclick = () => {
+      if (!recognition) return alert("您的瀏覽器不支援語音辨識！");
+      
       if (!isListening) {
-        await getEnhancedAudioStream(); // 觸發優化降噪權限
         recognition.lang = document.getElementById('langSelect').value;
-        recognition.start();
+        try {
+          recognition.start();
+        } catch(e) {
+          log("啟動失敗: " + e.message);
+        }
       } else {
         isListening = false;
         recognition.stop();
+        log("使用者手動停止收音");
       }
     };
   </script>
