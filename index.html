@@ -603,66 +603,68 @@
 
     // --- Groq Q&A 對答核心請求與語音播放 ---
     async function askGroqAI(question, apiKey) {
-      const url = "https://api.groq.com/openai/v1/chat/completions";
-      const payload = {
-        model: "llama-3.3-70b-versatile",
-        messages: [
-          {
-            role: "system",
-            content: "你是一個國中小課堂助教 AI。請使用簡短、清晰、生動有趣、適合學生的繁體中文來回答老師的問題。字數限制在 120 字以內，非常適合投影在教室大螢幕上供學生全班閱讀。"
+  const url = "https://api.groq.com/openai/v1/chat/completions";
+  const payload = {
+    // 使用 Groq 官方現行標準模型 ID
+    model: "llama-3.3-70b-versatile",
+    messages: [
+      {
+        role: "system",
+        content: "你是一個國中小課堂助教 AI。請使用簡短、清晰、生動有趣、適合學生的繁體中文來回答老師的問題。字數限制在 120 字以內，非常適合投影在教室大螢幕上供學生全班閱讀。"
+      },
+      {
+        role: "user",
+        content: question
+      }
+    ],
+    max_tokens: 250,
+    temperature: 0.7
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      // 若 70B 模型回傳 400/404，自動降級嘗試極速版 8B 模型
+      if (response.status === 404 || response.status === 400) {
+        payload.model = "llama-3.1-8b-instant";
+        const retryResponse = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json"
           },
-          {
-            role: "user",
-            content: question
-          }
-        ],
-        max_tokens: 250,
-        temperature: 0.7
-      };
+          body: JSON.stringify(payload)
+        });
 
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        if (response.status === 404 || response.status === 400) {
-          payload.model = "llama-3.1-8b-instant";
-          const retryResponse = await fetch(url, {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${apiKey}`,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify(payload)
-          });
-          if (retryResponse.ok) {
-            const data = await retryResponse.json();
-            return data.choices[0].message.content.trim();
-          }
+        if (retryResponse.ok) {
+          const retryData = await retryResponse.json();
+          return retryData.choices[0].message.content.trim();
         }
-        throw new Error(`Groq API 錯誤: ${response.status}`);
+        
+        const errJson = await retryResponse.json().catch(() => ({}));
+        throw new Error(`Groq API 錯誤 (${retryResponse.status}): ${errJson.error?.message || 'Bad Request'}`);
       }
 
-      const data = await response.json();
-      return data.choices[0].message.content.trim();
+      const errJson = await response.json().catch(() => ({}));
+      throw new Error(`Groq API 錯誤 (${response.status}): ${errJson.error?.message || '請求格式無效'}`);
     }
 
-    function speakQnAReply(text) {
-      if (!('speechSynthesis' in window)) return;
-      try {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'zh-TW';
-        window.speechSynthesis.speak(utterance);
-      } catch (e) {
-        console.error("語音發音朗讀失敗:", e);
-      }
-    }
+    const data = await response.json();
+    return data.choices[0].message.content.trim();
+
+  } catch (err) {
+    console.error("Groq API Call Failed:", err);
+    throw err;
+  }
+}
 
     // 1. 初始化 Firebase 軟容錯
     let db = null;
